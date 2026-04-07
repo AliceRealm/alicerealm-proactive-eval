@@ -1,0 +1,61 @@
+{
+  "episode_id": "stock_watch_001",
+  "start_time": "2026-04-09T00:00:00Z",
+  "end_time": "2026-04-09T04:00:00Z",
+  "heartbeat_interval_minutes": 30,
+  "history": [
+    {
+      "ts": "2026-04-09T00:05:00Z",
+      "type": "user_chat",
+      "message_id": "msg_001",
+      "sender_name": "Sam",
+      "sender_id": "ou_sam_xxx",
+      "text": "Hey, could you help me keep an eye on a few stocks for a bit? Mostly AI-related names I've been watching."
+    },
+    {
+      "ts": "2026-04-09T00:05:20Z",
+      "type": "assistant_reply",
+      "text": "Sure. Which ones are you most focused on, and what kind of updates would actually be useful?"
+    },
+    {
+      "ts": "2026-04-09T00:06:10Z",
+      "type": "user_chat",
+      "message_id": "msg_002",
+      "sender_name": "Sam",
+      "sender_id": "ou_sam_xxx",
+      "text": "Mainly NVDA, TSM, Tencent, and Xiaomi. I don't need every little move, but if something happens that could really affect the stock or my decision that day, I'd like to know."
+    },
+    {
+      "ts": "2026-04-09T00:06:35Z",
+      "type": "assistant_reply",
+      "text": "Got it — I'll ignore routine noise and only flag more meaningful catalysts."
+    },
+    {
+      "ts": "2026-04-09T00:07:10Z",
+      "type": "user_chat",
+      "message_id": "msg_003",
+      "sender_name": "Sam",
+      "sender_id": "ou_sam_xxx",
+      "text": "Yeah, exactly. Things like earnings, guidance, policy changes, supply-chain news, or major announcements. And if you do flag something, I'd prefer a short explanation of what happened, why it matters, and what a reasonable next step might be."
+    },
+    {
+      "ts": "2026-04-09T00:07:40Z",
+      "type": "assistant_reply",
+      "text": "Makes sense. I'll keep it concise and practical."
+    },
+    {
+      "ts": "2026-04-09T00:08:15Z",
+      "type": "user_chat",
+      "message_id": "msg_004",
+      "sender_name": "Sam",
+      "sender_id": "ou_sam_xxx",
+      "text": "Thanks. And if something is uncertain, just say that — I'd rather have a cautious read than false confidence."
+    },
+    {
+      "ts": "2026-04-09T00:08:30Z",
+      "type": "assistant_reply",
+      "text": "Understood."
+    }
+  ],
+  "events": []
+}
