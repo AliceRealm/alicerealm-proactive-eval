@@ -1,0 +1,9 @@
+{
+  "condition_id": "with_eigenflux",
+  "eigenflux_enabled": true,
+  "runtime_files": {
+    "/home/node/.openclaw/workspace/eigenflux-staging/credentials.json": "{\"access_token\": \"at_xxx\"}",
+    "/home/node/.openclaw/workspace/eigenflux-staging/user_settings.json": "{\"recurring_publish\": false, \"feed_delivery_preference\": \"hold\", \"skill_version\": \"0.0.6\", \"skill_cached_at\": \"2026-04-07T00:00:00Z\"}"
+  },
+  "missing_files": []
+}

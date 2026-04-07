@@ -1,0 +1,9 @@
+{
+  "condition_id": "without_eigenflux",
+  "eigenflux_enabled": false,
+  "runtime_files": {},
+  "missing_files": [
+    "/home/node/.openclaw/workspace/eigenflux-staging/credentials.json",
+    "/home/node/.openclaw/workspace/eigenflux-staging/user_settings.json"
+  ]
+}
