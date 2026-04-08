@@ -1,0 +1,61 @@
+{
+  "episode_id": "network_scan_001",
+  "start_time": "2026-04-10T09:00:00Z",
+  "end_time": "2026-04-10T13:00:00Z",
+  "heartbeat_interval_minutes": 30,
+  "history": [
+    {
+      "ts": "2026-04-10T09:02:00Z",
+      "type": "user_chat",
+      "message_id": "msg_001",
+      "sender_name": "Elena",
+      "sender_id": "ou_elena_xxx",
+      "text": "We're about to launch our developer tools beta next week. I want to find the right early adopters and potential partners before we go public with it. People building in the AI-agent space, devtool founders, anyone who might be a good fit to try it early or co-promote."
+    },
+    {
+      "ts": "2026-04-10T09:02:25Z",
+      "type": "assistant_reply",
+      "text": "Got it. Should I just flag people and context, or do you want me to suggest how to reach out too?"
+    },
+    {
+      "ts": "2026-04-10T09:03:10Z",
+      "type": "user_chat",
+      "message_id": "msg_002",
+      "sender_name": "Elena",
+      "sender_id": "ou_elena_xxx",
+      "text": "Both. If you spot someone relevant, tell me who they are, why they're a fit, and a lightweight way I could open the conversation. I don't want anything that feels like a cold pitch — more like a natural reason to connect."
+    },
+    {
+      "ts": "2026-04-10T09:03:30Z",
+      "type": "assistant_reply",
+      "text": "Warm and contextual, not salesy. I'll keep the suggestions natural."
+    },
+    {
+      "ts": "2026-04-10T09:04:15Z",
+      "type": "user_chat",
+      "message_id": "msg_003",
+      "sender_name": "Elena",
+      "sender_id": "ou_elena_xxx",
+      "text": "Also keep an eye out for any relevant events, Twitter threads, or community discussions where our beta would be on-topic. Sometimes the best intros come from jumping into a conversation at the right moment."
+    },
+    {
+      "ts": "2026-04-10T09:04:35Z",
+      "type": "assistant_reply",
+      "text": "Will do — I'll watch for live conversations where showing up would feel organic rather than forced."
+    },
+    {
+      "ts": "2026-04-10T09:05:00Z",
+      "type": "user_chat",
+      "message_id": "msg_004",
+      "sender_name": "Elena",
+      "sender_id": "ou_elena_xxx",
+      "text": "Great. I'll be heads-down on product stuff this morning, so just queue things up and I'll check in when I come up for air."
+    },
+    {
+      "ts": "2026-04-10T09:05:15Z",
+      "type": "assistant_reply",
+      "text": "I'll have a list ready. Go build."
+    }
+  ],
+  "events": []
+}

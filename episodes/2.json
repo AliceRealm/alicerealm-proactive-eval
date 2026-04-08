@@ -1,0 +1,61 @@
+{
+  "episode_id": "deal_flow_001",
+  "start_time": "2026-04-10T14:00:00Z",
+  "end_time": "2026-04-10T18:00:00Z",
+  "heartbeat_interval_minutes": 30,
+  "history": [
+    {
+      "ts": "2026-04-10T14:01:00Z",
+      "type": "user_chat",
+      "message_id": "msg_001",
+      "sender_name": "Felix",
+      "sender_id": "ou_derek_xxx",
+      "text": "I'm tracking a few things today. We're close to signing a distribution deal with a Japanese retailer, and there's a competing bid from a Korean group that might undercut us. Anything that shifts leverage — tariff news, logistics disruptions in East Asia, currency moves — I want to know fast."
+    },
+    {
+      "ts": "2026-04-10T14:01:20Z",
+      "type": "assistant_reply",
+      "text": "On it. I'll watch for anything that changes your negotiating position. How fast are we talking — interrupt you, or batch it?"
+    },
+    {
+      "ts": "2026-04-10T14:02:00Z",
+      "type": "user_chat",
+      "message_id": "msg_002",
+      "sender_name": "Felix",
+      "sender_id": "ou_derek_xxx",
+      "text": "If it's something I could act on within the hour, interrupt me. Otherwise just keep a running log and I'll check in between calls."
+    },
+    {
+      "ts": "2026-04-10T14:02:20Z",
+      "type": "assistant_reply",
+      "text": "Got it. Urgent and actionable gets pushed, everything else goes in the log."
+    },
+    {
+      "ts": "2026-04-10T14:03:00Z",
+      "type": "user_chat",
+      "message_id": "msg_003",
+      "sender_name": "Felix",
+      "sender_id": "ou_derek_xxx",
+      "text": "Also keep an ear out for anything on Meridian specifically — press mentions, competitor announcements in our space, anyone talking about us. We just closed our Series A so there might be chatter."
+    },
+    {
+      "ts": "2026-04-10T14:03:15Z",
+      "type": "assistant_reply",
+      "text": "Will do. I'll separate deal-relevant signals from brand mentions so you can triage quickly."
+    },
+    {
+      "ts": "2026-04-10T14:03:50Z",
+      "type": "user_chat",
+      "message_id": "msg_004",
+      "sender_name": "Felix",
+      "sender_id": "ou_derek_xxx",
+      "text": "Perfect. I'm jumping into back-to-back calls now. If you surface something, keep it to two lines max — what happened and what I should consider doing."
+    },
+    {
+      "ts": "2026-04-10T14:04:00Z",
+      "type": "assistant_reply",
+      "text": "Two lines, action-oriented. Go."
+    }
+  ],
+  "events": []
+}
