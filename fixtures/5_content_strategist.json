@@ -10,7 +10,6 @@
   "memory_files": {
     "memory/2026-04-06.md": "Nora has been following the debate around AI agent framework complexity — LangChain vs lighter alternatives like smolagents and raw SDK calls. She's opinionated that most frameworks are over-abstracted and the real value is in narrower, task-specific tooling. This is a topic she'd jump back into if there's a new development.",
     "memory/2026-04-08.md": "Nora mentioned she's been thinking about writing something on how LLM-based code generation is changing the junior developer hiring pipeline, but hasn't found the right hook yet. She said she'll wait until someone credible publishes data or a strong opinion she can respond to.",
-    "memory/2026-04-09.md": "Nora flagged that she doesn't want to cover OpenAI news unless there's a genuinely novel angle. Said the space is over-saturated with OpenAI commentary and she'd rather focus on less-covered players.",
     "memory/heartbeat-state.json": "{\"lastDailyCheckin\": null, \"lastChecks\": {}}"
   },
   "functional_traits": {
