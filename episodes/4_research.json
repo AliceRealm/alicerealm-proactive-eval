@@ -9,7 +9,7 @@
       "type": "user_chat",
       "message_id": "msg_001",
       "sender_name": "Mika",
-      "sender_id": "ou_marco_xxx",
+      "sender_id": "ou_mika_xxx",
       "text": "I'm writing a strategy memo on how on-device inference is going to reshape the mobile app ecosystem. I need to stay on top of what's coming out — new model releases, benchmark results, hardware announcements, anything from Apple or Qualcomm on NPU roadmaps."
     },
     {
@@ -22,7 +22,7 @@
       "type": "user_chat",
       "message_id": "msg_002",
       "sender_name": "Mika",
-      "sender_id": "ou_marco_xxx",
+      "sender_id": "ou_mika_xxx",
       "text": "Don't just pass things along as they come in. I'd rather you hold items, group related ones together, and give me a short synthesis. Like if three different people are reacting to the same paper, I don't need three separate alerts — I need one summary of the paper and why people care."
     },
     {
@@ -35,7 +35,7 @@
       "type": "user_chat",
       "message_id": "msg_003",
       "sender_name": "Mika",
-      "sender_id": "ou_marco_xxx",
+      "sender_id": "ou_mika_xxx",
       "text": "Exactly. And when you do surface something, I want to know: what's the finding, how does it compare to what we knew before, and does it change any assumption in my memo. If it doesn't meaningfully update anything, skip it."
     },
     {
@@ -48,7 +48,7 @@
       "type": "user_chat",
       "message_id": "msg_004",
       "sender_name": "Mika",
-      "sender_id": "ou_marco_xxx",
+      "sender_id": "ou_mika_xxx",
       "text": "Good. I'll be deep in writing for the next few hours. Don't interrupt unless something genuinely changes the picture."
     },
     {

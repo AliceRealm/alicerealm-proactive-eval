@@ -9,7 +9,7 @@
       "type": "user_chat",
       "message_id": "msg_001",
       "sender_name": "Felix",
-      "sender_id": "ou_derek_xxx",
+      "sender_id": "ou_felix_xxx",
       "text": "I'm tracking a few things today. We're close to signing a distribution deal with a Japanese retailer, and there's a competing bid from a Korean group that might undercut us. Anything that shifts leverage — tariff news, logistics disruptions in East Asia, currency moves — I want to know fast."
     },
     {
@@ -22,7 +22,7 @@
       "type": "user_chat",
       "message_id": "msg_002",
       "sender_name": "Felix",
-      "sender_id": "ou_derek_xxx",
+      "sender_id": "ou_felix_xxx",
       "text": "If it's something I could act on within the hour, interrupt me. Otherwise just keep a running log and I'll check in between calls."
     },
     {
@@ -35,7 +35,7 @@
       "type": "user_chat",
       "message_id": "msg_003",
       "sender_name": "Felix",
-      "sender_id": "ou_derek_xxx",
+      "sender_id": "ou_felix_xxx",
       "text": "Also keep an ear out for anything on Meridian specifically — press mentions, competitor announcements in our space, anyone talking about us. We just closed our Series A so there might be chatter."
     },
     {
@@ -48,7 +48,7 @@
       "type": "user_chat",
       "message_id": "msg_004",
       "sender_name": "Felix",
-      "sender_id": "ou_derek_xxx",
+      "sender_id": "ou_felix_xxx",
       "text": "Perfect. I'm jumping into back-to-back calls now. If you surface something, keep it to two lines max — what happened and what I should consider doing."
     },
     {

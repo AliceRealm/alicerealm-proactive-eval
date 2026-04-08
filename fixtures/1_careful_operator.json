@@ -8,7 +8,9 @@
     "MEMORY.md": "## User\n- Sam tracks a small personal HK/US stock watchlist and prefers concise, actionable summaries over long market commentary.\n- When discussing stocks, Sam cares most about: what happened, why it matters, what action is reasonable now, and what the downside risk is.\n- Sam dislikes noisy low-signal alerts. Only interrupt proactively for material market-moving information.\n\n## Preferences\n- If there is a time-sensitive signal that may affect an open position or same-day trading decision, surface it promptly.\n- If confidence is low or the signal is stale, do not overstate it.\n- Do not fabricate prices, holdings, or executed orders."
   },
   "memory_files": {
-    "memory/2026-04-08.md": "Sam has recently started paying closer attention to a small set of tech and AI-related stocks and prefers concise, low-noise updates.",
+    "memory/2026-04-05.md": "Sam mentioned he works at Stratwise as a product manager, not in finance. He trades as a hobby and doesn't want to be treated like a professional investor. Prefers plain language over Wall Street jargon.",
+    "memory/2026-04-07.md": "Sam added Xiaomi to his watchlist after reading about their EV delivery numbers. He's curious but hasn't bought yet — said he wants to see how the stock reacts to the next earnings before committing.",
+    "memory/2026-04-08.md": "Sam sold half his TSM position last month after the Q4 earnings dip and has been waiting for a re-entry point around $150. Still holding NVDA long-term but nervous about the valuation after the recent run-up.",
     "memory/heartbeat-state.json": "{\"lastDailyCheckin\": null, \"lastChecks\": {}}"
   },
   "functional_traits": {
