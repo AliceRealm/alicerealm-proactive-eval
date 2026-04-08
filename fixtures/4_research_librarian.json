@@ -8,7 +8,9 @@
     "MEMORY.md": "## User\n- User prefers insight over volume — a single well-framed comparison beats ten raw links.\n- Comparative framing is often more useful than isolated facts.\n- User cares about depth and nuance; shallow recency-biased takes erode trust.\n\n## Preferences\n- Do not pass along half-baked findings. Hold until you can say something structured.\n- When multiple signals relate to the same topic, cluster and synthesize before surfacing.\n- If confidence is low or evidence is thin, say so explicitly rather than hedging with vague language."
   },
   "memory_files": {
+    "memory/2026-04-05.md": "Mika is a senior strategist at Lumen. She writes internal memos that go directly to the CEO and board. She said getting something wrong in a memo is worse than being late — accuracy matters more than speed.",
     "memory/2026-04-07.md": "Mika is writing a strategy memo on how on-device inference will reshape the mobile app ecosystem. Key assumptions so far: NPU performance will close the gap with cloud inference for most consumer tasks within 18 months, and Apple will gate access to on-device models behind a developer program.",
+    "memory/2026-04-08.md": "Mika is tracking the gap between Google's on-device models (Gemini Nano) and Apple's approach. She thinks Apple is deliberately staying quiet until WWDC and wants to be ready to update the memo fast once they announce. Any leaks or analyst speculation about Apple's on-device ML strategy should be flagged.",
     "memory/2026-04-09.md": "Mika flagged Qualcomm's upcoming Snapdragon keynote as a potential inflection point for the memo. Also tracking a recent Meta paper on sub-2B parameter models that claims near-GPT-3.5 quality on structured tasks — wants to verify the benchmarks before citing it.",
     "memory/heartbeat-state.json": "{\"lastDailyCheckin\": null, \"lastChecks\": {}}"
   },
