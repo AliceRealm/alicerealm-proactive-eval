@@ -75,6 +75,44 @@
         "Qualcomm AI Hub on-device model optimization tools",
         "small language model near GPT-3.5 performance benchmark"
       ]
+    },
+    {
+      "fixture": "content_strategist_v1",
+      "episode": "discourse_watch_001",
+      "description": "Nora — independent behavioral science newsletter writer. Tracking replication crisis (priming studies), nudge ethics in fintech/health apps, dark patterns regulation (FTC/EU). Wants differentiated angles, not mainstream takes.",
+      "queries": [
+        "replication crisis psychology priming study failed 2026",
+        "social priming replication failure new results",
+        "nudge fintech app behavioral design ethics",
+        "dark patterns regulation FTC enforcement 2026",
+        "EU digital services act dark patterns ruling",
+        "behavioral nudge health app manipulation complaint",
+        "Thaler Sunstein nudge policy criticism fintech",
+        "FTC consumer protection deceptive design action 2026",
+        "behavioral science replication project update results",
+        "nudge ethics consumer finance app controversy",
+        "dark patterns UX lawsuit regulatory investigation",
+        "psychology replication crisis what replicates meta-analysis"
+      ]
+    },
+    {
+      "fixture": "learning_curator_v1",
+      "episode": "learning_session_001",
+      "description": "Leo — biotech ops head (Helix Therapeutics), MBA, self-studying molecular biology. Needs CRISPR editing types comparison (knockout vs base vs prime), LNP vs AAV gene therapy delivery tradeoffs, and accessible clinical application examples.",
+      "queries": [
+        "CRISPR knockout vs base editing vs prime editing comparison",
+        "CRISPR base editing prime editing explainer diagram",
+        "gene therapy LNP vs AAV delivery comparison 2026",
+        "lipid nanoparticle AAV gene therapy safety efficacy",
+        "CRISPR gene editing clinical trial results 2026",
+        "LNP gene therapy manufacturing cost scalability",
+        "AAV tissue targeting tropism gene therapy review",
+        "CRISPR prime editing clinical application progress",
+        "gene therapy delivery system comparison review paper",
+        "epigenetics gene regulation disease explainer",
+        "CRISPR editing types therapeutic applications review",
+        "LNP vs AAV delivery immunogenicity redosing comparison"
+      ]
     }
   ]
 }
