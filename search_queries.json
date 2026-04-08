@@ -1,0 +1,80 @@
+{
+  "pairs": [
+    {
+      "fixture": "careful_operator_v1",
+      "episode": "stock_watch_001",
+      "description": "Sam @ Stratwise — hobby stock trader monitoring AI-related names. Cautious, wants material catalysts only.",
+      "queries": [
+        "NVIDIA NVDA stock news today",
+        "TSMC TSM stock news earnings",
+        "Tencent stock Hong Kong news",
+        "Xiaomi stock EV delivery news",
+        "NVDA earnings guidance 2026",
+        "TSM semiconductor demand forecast",
+        "Tencent gaming regulation China",
+        "Xiaomi EV sales numbers 2026",
+        "US China semiconductor trade policy",
+        "AI chip supply chain disruption",
+        "NVIDIA valuation overvalued analysis",
+        "TSMC Arizona fab update"
+      ]
+    },
+    {
+      "fixture": "executive_finisher_v1",
+      "episode": "deal_flow_001",
+      "description": "Felix @ Meridian — CEO closing Japan distribution deal, watching competitor Arcline, macro signals that shift leverage.",
+      "queries": [
+        "Japan retail distribution market 2026",
+        "Japan tariff import policy changes",
+        "East Asia logistics disruption shipping",
+        "JPY USD exchange rate today",
+        "Korea retail market expansion",
+        "Japan retail partnership deals",
+        "East Asia supply chain news today",
+        "Arcline startup news",
+        "Meridian Series A startup",
+        "Japan consumer electronics retail trends",
+        "Korea Japan trade relations 2026",
+        "cross-border retail distribution Asia"
+      ]
+    },
+    {
+      "fixture": "social_scout_v1",
+      "episode": "network_scan_001",
+      "description": "Elena @ Canopy — launching dev tools beta, finding early adopters and partners in AI agent space. Watches Karpathy and Swyx.",
+      "queries": [
+        "AI agent developer tools launch 2026",
+        "AI agent framework new startup",
+        "developer tools beta launch community",
+        "Karpathy latest post AI",
+        "Swyx latest post AI agents",
+        "Toolchain Labs blog announcement",
+        "AI agent builder community discussion",
+        "devtool startup early adopter program",
+        "AI agent ecosystem partnerships",
+        "developer tools Product Hunt launch",
+        "AI agent hackathon event 2026",
+        "open source AI agent tools trending"
+      ]
+    },
+    {
+      "fixture": "research_librarian_v1",
+      "episode": "research_digest_001",
+      "description": "Mika @ Lumen — writing strategy memo on on-device inference reshaping mobile. Tracking Apple, Qualcomm, small models.",
+      "queries": [
+        "on-device inference mobile AI 2026",
+        "Apple on-device machine learning WWDC",
+        "Qualcomm Snapdragon NPU roadmap keynote",
+        "Gemini Nano on-device model update",
+        "small language model benchmark results",
+        "sub-2B parameter model performance",
+        "Meta small model paper 2026",
+        "NPU vs cloud inference latency comparison",
+        "Apple Core ML on-device strategy",
+        "on-device AI mobile app ecosystem",
+        "Qualcomm AI engine performance benchmark",
+        "edge inference model deployment mobile"
+      ]
+    }
+  ]
+}
