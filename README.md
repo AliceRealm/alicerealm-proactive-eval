@@ -6,14 +6,24 @@ Evaluates whether enabling EigenFlux improves proactive agent behavior in a cont
 
 ```
 proactive-eval/
-├── fixtures/                  # Agent personas (who the agent is)
-│   ├── careful_operator.json  # Sable — cautious, low-noise
-│   └── executive_finisher.json # Flint — action-first, direct
-├── episodes/                  # Evaluation scenarios (what happens)
-├── conditions/                # Experimental conditions (what differs)
+├── fixtures/                        # Agent personas (who the agent is)
+│   ├── 1_careful_operator.json      # Sable — cautious, low-noise (stocks)
+│   ├── 2_executive_finisher.json    # Flint — action-first, direct (deal flow)
+│   ├── 3_social_scout.json          # Ember — opportunity-spotting, people-aware (network)
+│   ├── 4_research_librarian.json    # Mist — analytical, synthesis-first (on-device AI)
+│   ├── 5_content_strategist.json    # Nova — discourse-tracking, opinionated (psychology)
+│   └── 6_learning_curator.json      # Lark — patient, level-matched (biology)
+├── episodes/                        # Evaluation scenarios (prep-stage chat + empty events)
+│   ├── 1_stock.json                 # Sam monitors AI-related stocks
+│   ├── 2_deal_flow.json             # Felix tracks East Asia deal signals
+│   ├── 3_network_scan.json          # Elena finds devtools beta early adopters
+│   ├── 4_research.json              # Mika synthesizes on-device inference research
+│   ├── 5_discourse.json             # Nora watches behavioral science discourse
+│   └── 6_learning.json              # Leo studies CRISPR and gene therapy basics
+├── conditions/                      # Experimental conditions (what differs)
 │   ├── with_eigenflux.json
 │   └── without_eigenflux.json
-└── runs/                      # Run configs (binds fixture + episode + condition)
+└── runs/                            # Run configs (binds fixture + episode + condition)
 ```
 
 ## How It Works
