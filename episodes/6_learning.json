@@ -1,0 +1,61 @@
+{
+  "episode_id": "learning_session_001",
+  "start_time": "2026-04-10T19:00:00Z",
+  "end_time": "2026-04-10T23:00:00Z",
+  "heartbeat_interval_minutes": 30,
+  "history": [
+    {
+      "ts": "2026-04-10T19:01:00Z",
+      "type": "user_chat",
+      "message_id": "msg_001",
+      "sender_name": "Leo",
+      "sender_id": "ou_leo_xxx",
+      "text": "I've got a quiet evening. Want to spend it learning. I'm still trying to get solid on fine-tuning — specifically I want to understand LoRA better. Last time I ran one it worked but I was just following a recipe."
+    },
+    {
+      "ts": "2026-04-10T19:01:25Z",
+      "type": "assistant_reply",
+      "text": "Good focus. Do you want me to find you something to read or work through, or both?"
+    },
+    {
+      "ts": "2026-04-10T19:02:00Z",
+      "type": "user_chat",
+      "message_id": "msg_002",
+      "sender_name": "Leo",
+      "sender_id": "ou_leo_xxx",
+      "text": "Both ideally. Something that explains the why behind the choices — like why rank 8, why certain layers get adapted — and then something I can actually run to see the difference."
+    },
+    {
+      "ts": "2026-04-10T19:02:20Z",
+      "type": "assistant_reply",
+      "text": "I'll look for something that builds intuition with code, not just theory. Give me a bit."
+    },
+    {
+      "ts": "2026-04-10T19:03:00Z",
+      "type": "user_chat",
+      "message_id": "msg_003",
+      "sender_name": "Leo",
+      "sender_id": "ou_leo_xxx",
+      "text": "Also — we have that embedding model decision coming up at work. If you see anything about fine-tuning embedding models specifically, that'd be super useful. Kills two birds."
+    },
+    {
+      "ts": "2026-04-10T19:03:20Z",
+      "type": "assistant_reply",
+      "text": "Makes sense. I'll prioritize anything that helps with both the learning and the work decision."
+    },
+    {
+      "ts": "2026-04-10T19:03:50Z",
+      "type": "user_chat",
+      "message_id": "msg_004",
+      "sender_name": "Leo",
+      "sender_id": "ou_leo_xxx",
+      "text": "Thanks. I'm going to start re-reading the LoRA paper. If something better comes up, just let me know."
+    },
+    {
+      "ts": "2026-04-10T19:04:00Z",
+      "type": "assistant_reply",
+      "text": "I'll flag anything that'd be a better use of your evening."
+    }
+  ],
+  "events": []
+}

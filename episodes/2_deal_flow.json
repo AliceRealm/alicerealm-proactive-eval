@@ -36,12 +36,12 @@
       "message_id": "msg_003",
       "sender_name": "Felix",
       "sender_id": "ou_felix_xxx",
-      "text": "Also keep an ear out for anything on Meridian specifically — press mentions, competitor announcements in our space, anyone talking about us. We just closed our Series A so there might be chatter."
+      "text": "Also watch for any moves from Shein or Temu in the Japanese retail space — new partnerships, logistics expansion, anything. If they're locking up the same channels we're going after, I need to know immediately."
     },
     {
       "ts": "2026-04-10T14:03:15Z",
       "type": "assistant_reply",
-      "text": "Will do. I'll separate deal-relevant signals from brand mentions so you can triage quickly."
+      "text": "Will do. I'll separate macro signals from competitor-specific moves so you can triage quickly."
     },
     {
       "ts": "2026-04-10T14:03:50Z",

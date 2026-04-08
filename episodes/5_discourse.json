@@ -1,0 +1,61 @@
+{
+  "episode_id": "discourse_watch_001",
+  "start_time": "2026-04-10T15:00:00Z",
+  "end_time": "2026-04-10T19:00:00Z",
+  "heartbeat_interval_minutes": 30,
+  "history": [
+    {
+      "ts": "2026-04-10T15:01:00Z",
+      "type": "user_chat",
+      "message_id": "msg_001",
+      "sender_name": "Nora",
+      "sender_id": "ou_nora_xxx",
+      "text": "I've got a few hours this afternoon and I want to write something if there's anything worth responding to. What's happening in the AI / devtools discourse today?"
+    },
+    {
+      "ts": "2026-04-10T15:01:25Z",
+      "type": "assistant_reply",
+      "text": "Let me scan what's been moving. Anything you're specifically hoping is happening, or fully open?"
+    },
+    {
+      "ts": "2026-04-10T15:02:00Z",
+      "type": "user_chat",
+      "message_id": "msg_002",
+      "sender_name": "Nora",
+      "sender_id": "ou_nora_xxx",
+      "text": "Fully open. But remember — I only want to write if I have a differentiated angle. If everyone's already said what I'd say, I'd rather skip it and work on the newsletter instead."
+    },
+    {
+      "ts": "2026-04-10T15:02:20Z",
+      "type": "assistant_reply",
+      "text": "Understood. I'll flag what's live and tell you where the gap is — or if there isn't one."
+    },
+    {
+      "ts": "2026-04-10T15:03:00Z",
+      "type": "user_chat",
+      "message_id": "msg_003",
+      "sender_name": "Nora",
+      "sender_id": "ou_nora_xxx",
+      "text": "Also if someone responds to my agent frameworks piece from last week, I want to know. That thread might still have life in it."
+    },
+    {
+      "ts": "2026-04-10T15:03:15Z",
+      "type": "assistant_reply",
+      "text": "I'll keep an eye on responses to that piece too."
+    },
+    {
+      "ts": "2026-04-10T15:03:45Z",
+      "type": "user_chat",
+      "message_id": "msg_004",
+      "sender_name": "Nora",
+      "sender_id": "ou_nora_xxx",
+      "text": "Cool. I'll be writing — ping me if something's time-sensitive or if you find a good hook for the junior dev hiring thing I've been sitting on."
+    },
+    {
+      "ts": "2026-04-10T15:04:00Z",
+      "type": "assistant_reply",
+      "text": "Will do. I'll stay quiet unless there's something worth your afternoon."
+    }
+  ],
+  "events": []
+}
