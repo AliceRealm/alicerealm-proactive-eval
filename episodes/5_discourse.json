@@ -10,7 +10,7 @@
       "message_id": "msg_001",
       "sender_name": "Nora",
       "sender_id": "ou_nora_xxx",
-      "text": "I've got a few hours this afternoon and I want to write something if there's anything worth responding to. What's happening in the AI / devtools discourse today?"
+      "text": "I've got a few hours this afternoon and I want to write something if there's anything worth responding to. Anything moving in behavioral science today? Replication studies, nudge policy news, new experimental results?"
     },
     {
       "ts": "2026-04-10T15:01:25Z",
@@ -36,12 +36,12 @@
       "message_id": "msg_003",
       "sender_name": "Nora",
       "sender_id": "ou_nora_xxx",
-      "text": "Also if someone responds to my agent frameworks piece from last week, I want to know. That thread might still have life in it."
+      "text": "Also keep watching for any new developments around dark patterns regulation or nudge ethics in tech — if the FTC or EU makes a move, or a major app gets called out, that could be the hook I need for the fintech nudging piece."
     },
     {
       "ts": "2026-04-10T15:03:15Z",
       "type": "assistant_reply",
-      "text": "I'll keep an eye on responses to that piece too."
+      "text": "I'll watch for regulatory and ethics developments in that space."
     },
     {
       "ts": "2026-04-10T15:03:45Z",
@@ -49,7 +49,7 @@
       "message_id": "msg_004",
       "sender_name": "Nora",
       "sender_id": "ou_nora_xxx",
-      "text": "Cool. I'll be writing — ping me if something's time-sensitive or if you find a good hook for the junior dev hiring thing I've been sitting on."
+      "text": "Cool. I'll be writing — ping me if something's time-sensitive or if a big replication result drops."
     },
     {
       "ts": "2026-04-10T15:04:00Z",
