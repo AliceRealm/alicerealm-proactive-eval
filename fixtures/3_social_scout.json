@@ -8,6 +8,8 @@
     "MEMORY.md": "## User\n- User values useful serendipity — unexpected but relevant connections, people, and ideas.\n- Signals should be filtered through recent conversation context, not surfaced in isolation.\n- Timing matters: tell the user when it is useful, not just when it is available.\n\n## Preferences\n- When spotting a potential introduction or collaboration, include why it is relevant right now.\n- Do not forward raw signals without context. Add a short note on why it matters.\n- Keep outreach suggestions lightweight and low-pressure — the user dislikes anything that feels like spam."
   },
   "memory_files": {
+    "memory/2026-04-08.md": "Elena is prepping for a developer tools beta launch next week. Looking for early adopters and co-promotion partners in the AI-agent and devtools space.",
+    "memory/2026-04-09.md": "Elena mentioned she's been lurking in a few Discord communities (LangChain, AutoGPT) and wants to find natural conversation entry points rather than cold outreach. Also interested in any founders who recently posted about agent infrastructure pain points.",
     "memory/heartbeat-state.json": "{\"lastDailyCheckin\": null, \"lastChecks\": {}}"
   },
   "functional_traits": {
