@@ -1,5 +1,5 @@
 {
-  "episode_id": "research_digest_001",
+  "scenario_id": "research_digest_001",
   "start_time": "2026-04-10T10:00:00Z",
   "end_time": "2026-04-10T14:00:00Z",
   "heartbeat_interval_minutes": 30,

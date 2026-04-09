@@ -1,5 +1,5 @@
 {
-  "episode_id": "stock_watch_001",
+  "scenario_id": "stock_watch_001",
   "start_time": "2026-04-09T00:00:00Z",
   "end_time": "2026-04-09T04:00:00Z",
   "heartbeat_interval_minutes": 30,
