@@ -2,9 +2,9 @@
 # Cron wrapper for baseline search collection.
 # Runs collect_searches.py and logs output.
 #
-# To install cron (every 30 min):
+# To install cron (every 5 min):
 #   crontab -e
-#   */30 * * * * /Users/pascal/Desktop/jarvis/proactive-eval/run_collection.sh
+#   */5 * * * * /Users/pascal/Desktop/jarvis/proactive-eval/run_collection.sh
 #
 # To stop after 2 days: remove the cron entry, or the script auto-expires.
 
