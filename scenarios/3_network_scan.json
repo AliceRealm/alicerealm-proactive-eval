@@ -1,5 +1,5 @@
 {
-  "episode_id": "network_scan_001",
+  "scenario_id": "network_scan_001",
   "start_time": "2026-04-10T09:00:00Z",
   "end_time": "2026-04-10T13:00:00Z",
   "heartbeat_interval_minutes": 30,

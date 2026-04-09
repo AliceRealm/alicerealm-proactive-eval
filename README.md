@@ -13,7 +13,7 @@ proactive-eval/
 │   ├── 4_research_librarian.json    # Mist — analytical, synthesis-first (on-device AI)
 │   ├── 5_content_strategist.json    # Nova — discourse-tracking, opinionated (psychology)
 │   └── 6_learning_curator.json      # Lark — patient, level-matched (biology)
-├── episodes/                        # Evaluation scenarios (prep-stage chat + empty events)
+├── scenarios/                       # Scenario inputs (prep-stage chat + empty events)
 │   ├── 1_stock.json                 # Sam monitors AI-related stocks
 │   ├── 2_deal_flow.json             # Felix tracks East Asia deal signals
 │   ├── 3_network_scan.json          # Elena finds devtools beta early adopters
@@ -23,7 +23,7 @@ proactive-eval/
 ├── conditions/                      # Experimental conditions (what differs)
 │   ├── with_eigenflux.json
 │   └── without_eigenflux.json
-└── runs/                            # Run configs (binds fixture + episode + condition)
+└── runs/                            # Run configs (binds fixture + scenario + condition)
 ```
 
 ## How It Works
@@ -33,7 +33,7 @@ Each experiment is a **paired comparison**: same agent, same scenario, same time
 ### 4 Input Files Per Run
 
 1. **`agent_fixture.json`** — agent persona, memory, heartbeat rules
-2. **`episode.json`** — timestamped history, external signals, heartbeat schedule
+2. **`scenario.json`** — timestamped history, external signals, heartbeat schedule
 3. **`condition.json`** — EigenFlux enabled/disabled + runtime file state
 4. **`run.json`** — binds the above three + model/runtime config
 
@@ -50,7 +50,7 @@ Secondary: redundancy, token cost.
 
 ### Recommended Episode Config
 
-- Episode length: 4 hours
+- Scenario length: 4 hours
 - Heartbeat interval: 30 minutes
 - Total cycles: 8
 

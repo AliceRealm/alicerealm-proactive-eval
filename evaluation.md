@@ -1,13 +1,21 @@
 # Evaluation Method
 
+## Terminology
+
+- **Scenario** — the input definition: timestamped interaction history, event timeline, and heartbeat schedule. Lives in `scenarios/` as a JSON file.
+- **Episode** — one complete execution of a scenario under a specific condition, producing a full trace. An episode = scenario + fixture + condition + resulting output.
+- **Paired trial** — two episodes running the same scenario (control vs treatment).
+
+---
+
 ## 1. Expected Output Log Structure
 
-Each run produces a timestamped trace covering the full episode. Below is the expected shape of a single run's output.
+Each episode produces a timestamped trace. Below is the expected shape of a single episode's output.
 
 ### 1.1 Episode Header
 
 ```
-episode_id:    stock_watch_001
+scenario_id:   stock_watch_001
 fixture_id:    careful_operator_v1
 condition:     with_eigenflux | without_eigenflux
 start_time:    2026-04-09T00:00:00Z
@@ -18,7 +26,7 @@ total_cycles:  8
 
 ### 1.2 Prep-Stage Chat
 
-The interaction history from the episode file, reproduced verbatim. This is the shared context both conditions start from.
+The interaction history from the scenario file, reproduced verbatim. This is the shared context both conditions start from.
 
 ```
 [00:05:00] user/Sam:       "Hey, could you help me keep an eye on a few stocks..."
@@ -114,13 +122,13 @@ Each signal is annotated:
 | `expected_action` | What a good agent should do (surface, hold, update memory, ignore) |
 | `source` | Where discoverable (search-only, eigenflux-only, both) |
 
-This set is constructed per-episode and serves as the evaluation target. It is not ground truth — it is a best-effort reference.
+This set is constructed per-scenario and serves as the evaluation target. It is not ground truth — it is a best-effort reference.
 
 ---
 
 ## 3. Opportunity Annotation
 
-Each episode defines a set of **opportunities** — moments where proactive behavior is plausible.
+Each scenario defines a set of **opportunities** — moments where proactive behavior is plausible.
 
 An opportunity maps one or more reference signals to a heartbeat cycle window and an expected agent response:
 
@@ -198,7 +206,7 @@ Count of duplicate or near-duplicate signals surfaced across the episode. Penali
 
 #### Token Cost
 
-Total tokens consumed across the episode. Not scored directly — reported alongside primary metrics for cost-efficiency analysis. Flag runs where token usage is >2x the median for the same episode across conditions.
+Total tokens consumed across the episode. Not scored directly — reported alongside primary metrics for cost-efficiency analysis. Flag runs where token usage is >2x the median for the same scenario across conditions.
 
 ---
 
@@ -222,10 +230,10 @@ Score range: 0.0 to 1.0 (before penalty).
 ## 5. Scoring Procedure
 
 ### Step 1 — Build reference signal set
-Before running the episode, define the reference signals and opportunities using the episode's event timeline and domain knowledge.
+Before running, define the reference signals and opportunities using the scenario's event timeline and domain knowledge.
 
 ### Step 2 — Run paired episodes
-Run the same episode under both conditions (control and treatment). Collect full traces per section 1.
+Run the same scenario under both conditions (control and treatment). Collect full traces per section 1.
 
 ### Step 3 — Annotate opportunities
 For each opportunity in each run, record:
