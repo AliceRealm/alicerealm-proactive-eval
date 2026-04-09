@@ -3,12 +3,14 @@
 Baseline search collector for proactive-eval.
 
 Runs web searches for each fixture-episode pair and saves results.
-Designed to be triggered every 30 minutes by cron over a 2-day window.
+Loops every --interval minutes for --duration hours, then exits.
 
 Usage:
-    python3 collect_searches.py                # Run one cycle for all pairs
-    python3 collect_searches.py --pair 0       # Run only the first pair
-    python3 collect_searches.py --dry-run      # Show what would be searched, no actual queries
+    python3 collect_searches.py                          # Loop every 30min for 24h
+    python3 collect_searches.py --interval 15 --duration 12  # Every 15min for 12h
+    python3 collect_searches.py --once                   # Run one cycle and exit
+    python3 collect_searches.py --pair 0                 # Only the first pair
+    python3 collect_searches.py --dry-run                # Show queries, no searches
 """
 
 import json
@@ -105,12 +107,30 @@ def save_result(fixture_id: str, result: dict):
     return filename
 
 
+def run_one_cycle(pairs: list[dict], dry_run: bool = False):
+    """Run one full collection cycle across all pairs."""
+    print(f"=== Cycle @ {datetime.now().isoformat()} ===")
+    for pair in pairs:
+        fixture_id = pair["fixture"]
+        print(f"--- {fixture_id} ({pair['description'][:60]}...) ---")
+        result = collect_one_pair(pair, dry_run=dry_run)
+        if not dry_run:
+            save_result(fixture_id, result)
+        print()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Baseline search collector")
     parser.add_argument("--pair", type=int, default=None,
                         help="Run only the Nth pair (0-indexed)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Show queries without executing searches")
+    parser.add_argument("--interval", type=int, default=5,
+                        help="Minutes between cycles (default: 5)")
+    parser.add_argument("--duration", type=float, default=0,
+                        help="Hours to run (default: 0 = forever)")
+    parser.add_argument("--once", action="store_true",
+                        help="Run one cycle and exit")
     args = parser.parse_args()
 
     pairs = load_queries()
@@ -121,24 +141,39 @@ def main():
             sys.exit(1)
         pairs = [pairs[args.pair]]
 
+    if args.once:
+        run_forever = False
+        total_cycles = 1
+    elif args.duration > 0:
+        run_forever = False
+        total_cycles = int(args.duration * 60 / args.interval)
+    else:
+        run_forever = True
+        total_cycles = None
+
     print(f"=== Baseline Search Collection ===")
-    print(f"Time: {datetime.now().isoformat()}")
-    print(f"Pairs: {len(pairs)}")
+    print(f"Start: {datetime.now().isoformat()}")
+    mode = "forever" if run_forever else (f"1 cycle" if args.once else f"{args.duration}h ({total_cycles} cycles)")
+    print(f"Pairs: {len(pairs)} | Interval: {args.interval}min | Mode: {mode}")
     print(f"Dry run: {args.dry_run}")
     print()
 
-    for pair in pairs:
-        fixture_id = pair["fixture"]
-        print(f"--- {fixture_id} ({pair['description'][:60]}...) ---")
+    cycle = 0
+    while True:
+        cycle += 1
+        label = f"[Cycle {cycle}]" if run_forever else f"[Cycle {cycle}/{total_cycles}]"
+        print(label)
+        run_one_cycle(pairs, dry_run=args.dry_run)
 
-        result = collect_one_pair(pair, dry_run=args.dry_run)
+        if total_cycles is not None and cycle >= total_cycles:
+            break
 
-        if not args.dry_run:
-            save_result(fixture_id, result)
+        next_time = datetime.now().timestamp() + args.interval * 60
+        next_str = datetime.fromtimestamp(next_time).strftime("%H:%M:%S")
+        print(f"Sleeping {args.interval}min, next cycle at {next_str} ...")
+        time.sleep(args.interval * 60)
 
-        print()
-
-    print("Done.")
+    print(f"=== All done. {cycle} cycles completed. ===")
 
 
 if __name__ == "__main__":
