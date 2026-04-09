@@ -108,13 +108,22 @@ episode_summary:
 
 ## 2. Reference Signal Set
 
-Before scoring, define the **reference signal set** for the episode: the set of signals that a competent, well-informed agent could reasonably have discovered during the time window.
+The **reference signal set** is the set of signals that a competent, well-informed agent could reasonably have discovered during the scenario's time window. It serves as the evaluation target for coverage scoring.
 
-Each signal is annotated:
+### How it's built
+
+At each heartbeat timestamp in the scenario, run a **deep research query** scoped to the user's task and domain. The cumulative results across all heartbeats form the reference signal set for that scenario.
+
+This means the reference set is constructed empirically from the same time windows the agent operates in — not pre-authored or hypothetical. It represents what was actually discoverable at each point in time.
+
+### Per-signal annotation
+
+Each signal in the set is annotated:
 
 | Field | Description |
 |-------|-------------|
 | `signal_id` | Unique identifier |
+| `heartbeat_cycle` | Which heartbeat's deep research surfaced it |
 | `timestamp` | When the signal became available |
 | `description` | What happened |
 | `relevance` | How relevant to the user's stated task (high / medium / low) |
@@ -122,7 +131,7 @@ Each signal is annotated:
 | `expected_action` | What a good agent should do (surface, hold, update memory, ignore) |
 | `source` | Where discoverable (search-only, eigenflux-only, both) |
 
-This set is constructed per-scenario and serves as the evaluation target. It is not ground truth — it is a best-effort reference.
+The reference set is not ground truth — it is a best-effort empirical baseline. Signals may be missed by deep research too, and some low-relevance results may need filtering. But it provides a reproducible, scenario-aligned target that reflects real-world discoverability.
 
 ---
 
