@@ -137,9 +137,17 @@ The reference set is not ground truth — it is a best-effort empirical baseline
 
 ## 3. Opportunity Annotation
 
-Each scenario defines a set of **opportunities** — moments where proactive behavior is plausible.
+Opportunities are derived from the **reference signal set**, not from individual episode traces. This keeps the evaluation target shared across both episodes in a paired trial, so scores are directly comparable.
 
-An opportunity maps one or more reference signals to a heartbeat cycle window and an expected agent response:
+### Why opportunities are defined from the reference set, not per-episode
+
+The two episodes in a trial will diverge — different signals discovered, different chat progressions, different internal state. If opportunities were annotated per-episode, each episode would be scored against a different target, making comparison meaningless.
+
+Instead: the reference signal set (built from deep research at each heartbeat) defines **what opportunities existed and when**. Both episodes are then scored against this shared set. The divergence between episodes shows up in the scores — not in the definition of what was scoreable.
+
+### Structure
+
+Each opportunity maps one or more reference signals to a heartbeat cycle window and an expected response, grounded in the persona's functional traits:
 
 ```
 opportunity_id: opp_001
@@ -151,7 +159,15 @@ acceptable_timing: within 1 cycle of signal availability
 persona_constraint: "Sam has high interruption threshold — only surface if clearly material"
 ```
 
-Opportunities are the unit of behavioral evaluation. Episode-level scores are aggregated from opportunity-level judgments.
+### Scoring against divergent traces
+
+When scoring each episode against the shared opportunity set:
+
+- **Coverage and timeliness** are straightforward — did the agent find this signal and act within the window?
+- **Action quality** accounts for the episode's actual trace. If an agent already surfaced a related signal in an earlier cycle, not re-surfacing it later is correct (not a miss). If prior context changes what action is appropriate, score accordingly.
+- **Accuracy** is evaluated against what the agent actually said, not what it could have said.
+
+The opportunity set defines *what to look for*. The episode trace determines *how to judge what happened*.
 
 ---
 
