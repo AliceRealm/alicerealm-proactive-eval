@@ -2,7 +2,7 @@
 """
 Baseline search collector for proactive-eval.
 
-Runs web searches for each fixture-episode pair and saves results.
+Runs web searches for each fixture-scenario pair and saves results.
 Loops every --interval minutes for --duration hours, then exits.
 
 Usage:
@@ -49,15 +49,15 @@ def search(query: str, max_results: int = MAX_RESULTS_PER_QUERY, retries: int = 
 
 
 def collect_one_pair(pair: dict, dry_run: bool = False) -> dict:
-    """Run all queries for one fixture-episode pair and return structured results."""
+    """Run all queries for one fixture-scenario pair and return structured results."""
     fixture_id = pair["fixture"]
-    episode_id = pair.get("episode", "unknown")
+    scenario_id = pair.get("scenario", "unknown")
     queries = pair["queries"]
 
     now = datetime.now(timezone.utc)
     cycle_result = {
         "fixture_id": fixture_id,
-        "episode_id": episode_id,
+        "scenario_id": scenario_id,
         "timestamp_utc": now.isoformat(),
         "timestamp_local": datetime.now().isoformat(),
         "query_count": len(queries),

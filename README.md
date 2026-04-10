@@ -54,6 +54,41 @@ Secondary: redundancy, token cost.
 - Heartbeat interval: 30 minutes
 - Total cycles: 8
 
+## Setup
+
+### 1. Anthropic API key
+
+Create `proactive-eval/.env` with your Anthropic API key:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+`run_simulation.py` loads this file automatically (no `python-dotenv` dependency
+required). Anything you `export` in your shell takes precedence.
+
+### 2. EigenFlux agent credentials (optional, only for `with_eigenflux` runs)
+
+Each agent fixture needs its own EigenFlux account. Real credentials are
+**gitignored** — only the schema template is checked in.
+
+```bash
+cp eigenflux/credentials/template.json eigenflux/credentials/<fixture_id>.json
+# then fill in agent_id / access_token / email for that fixture
+```
+
+Never commit real tokens. The repo will refuse them via `.gitignore`.
+
+### 3. Run
+
+```bash
+python3 run_simulation.py                       # all 6 pairs, 8 cycles each
+python3 run_simulation.py --pair 0 --cycle 0    # single cycle smoke test
+python3 run_simulation.py --dry-run             # build prompts without calling Claude
+```
+
+Episode traces land in `data/episodes/`.
+
 ## Source
 
 Derived from Phronesis internal docs: "Proactive 讨论" knowledge base.

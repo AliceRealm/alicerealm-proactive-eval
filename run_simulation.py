@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Proactive evaluation simulator — without_eigenflux condition.
+Proactive evaluation runner — without_eigenflux condition.
 
-For each fixture-episode pair, simulates 8 heartbeat cycles (4h, every 30min).
-At each heartbeat, the agent sees its identity files, chat history, past decisions,
-and web search results from the matching time window. It decides whether to
-proactively message the user.
+For each fixture-scenario pair, runs an episode of 8 heartbeat cycles. At each
+heartbeat the agent sees its identity files, chat history, past decisions, and
+web search results from the matching time window, then decides whether to
+proactively message the user. Each run produces one episode trace.
 
 Usage:
     python3 run_simulation.py                        # Run all 6 pairs
@@ -24,13 +24,24 @@ from pathlib import Path
 import anthropic
 
 SCRIPT_DIR = Path(__file__).parent
-EPISODES_DIR = SCRIPT_DIR / "episodes"
+
+# Load .env file (no python-dotenv dependency)
+_env_file = SCRIPT_DIR / ".env"
+if _env_file.exists():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if not _line or _line.startswith("#") or "=" not in _line:
+            continue
+        _k, _v = _line.split("=", 1)
+        os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+
+SCENARIOS_DIR = SCRIPT_DIR / "scenarios"
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 CONDITIONS_DIR = SCRIPT_DIR / "conditions"
 SEARCH_DATA_DIR = SCRIPT_DIR / "data" / "searches"
-OUTPUT_DIR = SCRIPT_DIR / "data" / "simulations"
+OUTPUT_DIR = SCRIPT_DIR / "data" / "episodes"
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-haiku-4-5-20251001"
 NUM_CYCLES = 8
 HEARTBEAT_INTERVAL_MIN = 5
 
@@ -41,18 +52,18 @@ def load_json(path: Path) -> dict:
 
 
 def get_pairs() -> list[dict]:
-    """Build fixture-episode pairs from directory contents."""
+    """Build fixture-scenario pairs from directory contents."""
     fixtures = sorted(FIXTURES_DIR.glob("*.json"))
-    episodes = sorted(EPISODES_DIR.glob("*.json"))
+    scenarios = sorted(SCENARIOS_DIR.glob("*.json"))
     pairs = []
-    for fix_path, ep_path in zip(fixtures, episodes):
+    for fix_path, scen_path in zip(fixtures, scenarios):
         fixture = load_json(fix_path)
-        episode = load_json(ep_path)
+        scenario = load_json(scen_path)
         pairs.append({
             "fixture": fixture,
-            "episode": episode,
+            "scenario": scenario,
             "fixture_path": fix_path,
-            "episode_path": ep_path,
+            "scenario_path": scen_path,
         })
     return pairs
 
@@ -141,13 +152,13 @@ Be judicious. The user trusts you to filter noise. A skip is often the right cal
 
 
 def build_cycle_message(
-    episode: dict,
+    scenario: dict,
     cycle_index: int,
     search_results: list[dict],
     prior_decisions: list[dict],
 ) -> str:
     """Build the user-turn message for one heartbeat cycle."""
-    start_time = datetime.fromisoformat(episode["start_time"])
+    start_time = datetime.fromisoformat(scenario["start_time"])
     cycle_time = start_time + timedelta(minutes=HEARTBEAT_INTERVAL_MIN * cycle_index)
 
     parts = []
@@ -160,7 +171,7 @@ def build_cycle_message(
     # Chat history (only in first cycle)
     if cycle_index == 0:
         parts.append("## Chat History (prep stage)")
-        for msg in episode.get("history", []):
+        for msg in scenario.get("history", []):
             sender = msg.get("sender_name", "Assistant")
             if msg["type"] == "user_chat":
                 parts.append(f"**{sender}**: {msg['text']}")
@@ -232,28 +243,34 @@ def parse_agent_response(text: str) -> dict:
         }
 
 
-def run_simulation(pair: dict, pair_index: int, dry_run: bool = False,
-                   single_cycle: int | None = None, model: str = MODEL) -> dict:
-    """Run a full simulation for one fixture-episode pair."""
+def run_episode(pair: dict, pair_index: int, dry_run: bool = False,
+                single_cycle: int | None = None, model: str = MODEL) -> dict:
+    """Run a full episode for one fixture-scenario pair."""
     fixture = pair["fixture"]
-    episode = pair["episode"]
+    scenario = pair["scenario"]
     fixture_id = fixture["fixture_id"]
-    episode_id = episode["episode_id"]
+    scenario_id = scenario["scenario_id"]
 
     print(f"\n{'='*60}")
-    print(f"Pair {pair_index}: {fixture_id} × {episode_id}")
+    print(f"Pair {pair_index}: {fixture_id} × {scenario_id}")
     print(f"{'='*60}")
 
     system_prompt = build_system_prompt(fixture)
     prior_decisions = []
 
-    simulation = {
+    episode = {
+        "scenario_id": scenario_id,
         "fixture_id": fixture_id,
-        "episode_id": episode_id,
         "condition": "without_eigenflux",
         "model": model,
         "num_cycles": NUM_CYCLES,
+        "heartbeat_interval_min": HEARTBEAT_INTERVAL_MIN,
         "started_at": datetime.now(timezone.utc).isoformat(),
+        "inputs": {
+            "system_prompt": system_prompt,
+            "scenario": scenario,
+            "fixture": fixture,
+        },
         "cycles": [],
     }
 
@@ -271,7 +288,7 @@ def run_simulation(pair: dict, pair_index: int, dry_run: bool = False,
         search_results = get_search_results_for_cycle(fixture_id, cycle_index, NUM_CYCLES)
         print(f"  Search results: {len(search_results)} query groups")
 
-        user_message = build_cycle_message(episode, cycle_index, search_results, prior_decisions)
+        user_message = build_cycle_message(scenario, cycle_index, search_results, prior_decisions)
 
         if dry_run:
             print(f"  [DRY RUN] System prompt: {len(system_prompt)} chars")
@@ -279,20 +296,26 @@ def run_simulation(pair: dict, pair_index: int, dry_run: bool = False,
             cycle_record = {
                 "cycle": cycle_index + 1,
                 "dry_run": True,
-                "system_prompt_length": len(system_prompt),
-                "user_message_length": len(user_message),
+                "input": {
+                    "user_message": user_message,
+                    "search_results": search_results,
+                    "prior_decisions_snapshot": list(prior_decisions),
+                },
             }
-            simulation["cycles"].append(cycle_record)
+            episode["cycles"].append(cycle_record)
             continue
 
         # Call Claude
         print(f"  Calling {model}...")
-        response = client.messages.create(
-            model=model,
-            max_tokens=1024,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
-        )
+        request_payload = {
+            "model": model,
+            "max_tokens": 1024,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": user_message}],
+        }
+        request_started_at = datetime.now(timezone.utc).isoformat()
+        response = client.messages.create(**request_payload)
+        request_completed_at = datetime.now(timezone.utc).isoformat()
 
         raw_text = response.content[0].text
         decision = parse_agent_response(raw_text)
@@ -306,38 +329,63 @@ def run_simulation(pair: dict, pair_index: int, dry_run: bool = False,
 
         cycle_record = {
             "cycle": cycle_index + 1,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "decision": decision,
-            "search_queries_available": len(search_results),
-            "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens,
+            "request_started_at": request_started_at,
+            "request_completed_at": request_completed_at,
+            "input": {
+                "user_message": user_message,
+                "search_results": search_results,
+                "prior_decisions_snapshot": list(prior_decisions[:-1]),
+            },
+            "request": {
+                "model": model,
+                "max_tokens": request_payload["max_tokens"],
+                "messages": request_payload["messages"],
+                # system_prompt is stored once at episode["inputs"]; not duplicated per cycle
+            },
+            "output": {
+                "raw_response": raw_text,
+                "decision": decision,
+                "stop_reason": response.stop_reason,
+            },
+            "usage": {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+            },
         }
-        simulation["cycles"].append(cycle_record)
+        episode["cycles"].append(cycle_record)
 
-    simulation["completed_at"] = datetime.now(timezone.utc).isoformat()
+    episode["completed_at"] = datetime.now(timezone.utc).isoformat()
 
     # Count actions
-    sends = sum(1 for c in simulation["cycles"] if c.get("decision", {}).get("action") == "send")
-    skips = sum(1 for c in simulation["cycles"] if c.get("decision", {}).get("action") == "skip")
-    simulation["summary"] = {
+    def _action(c: dict) -> str:
+        return c.get("output", {}).get("decision", {}).get("action", "")
+
+    sends = sum(1 for c in episode["cycles"] if _action(c) == "send")
+    skips = sum(1 for c in episode["cycles"] if _action(c) == "skip")
+    total_input_tokens = sum(c.get("usage", {}).get("input_tokens", 0) for c in episode["cycles"])
+    total_output_tokens = sum(c.get("usage", {}).get("output_tokens", 0) for c in episode["cycles"])
+    episode["summary"] = {
         "total_sends": sends,
         "total_skips": skips,
         "send_rate": sends / max(1, sends + skips),
+        "total_input_tokens": total_input_tokens,
+        "total_output_tokens": total_output_tokens,
     }
 
-    return simulation
+    return episode
 
 
-def save_simulation(simulation: dict):
-    """Save simulation results."""
+def save_episode(episode: dict):
+    """Save episode trace."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    fixture_id = simulation["fixture_id"]
-    condition = simulation["condition"]
+    fixture_id = episode["fixture_id"]
+    scenario_id = episode["scenario_id"]
+    condition = episode["condition"]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = OUTPUT_DIR / f"{condition}__{fixture_id}__{ts}.json"
+    filename = OUTPUT_DIR / f"{condition}__{fixture_id}__{scenario_id}__{ts}.json"
 
     with open(filename, "w") as f:
-        json.dump(simulation, f, indent=2, ensure_ascii=False)
+        json.dump(episode, f, indent=2, ensure_ascii=False)
 
     print(f"\nSaved -> {filename}")
     return filename
@@ -365,19 +413,19 @@ def main():
         pairs_to_run = list(enumerate(pairs))
 
     for pair_index, pair in pairs_to_run:
-        simulation = run_simulation(pair, pair_index, dry_run=args.dry_run, single_cycle=args.cycle, model=model)
+        episode = run_episode(pair, pair_index, dry_run=args.dry_run, single_cycle=args.cycle, model=model)
         if not args.dry_run:
-            save_simulation(simulation)
+            save_episode(episode)
 
         # Print summary
-        summary = simulation.get("summary", {})
+        summary = episode.get("summary", {})
         if summary:
             print(f"\n  Summary: {summary['total_sends']} sends, "
                   f"{summary['total_skips']} skips, "
                   f"send rate: {summary['send_rate']:.0%}")
 
     print(f"\n{'='*60}")
-    print("All simulations complete.")
+    print("All episodes complete.")
 
 
 if __name__ == "__main__":

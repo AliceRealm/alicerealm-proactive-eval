@@ -1,3 +1,15 @@
 data/
 __pycache__/
 *.pyc
+.env
+.env.*
+.DS_Store
+
+# EigenFlux agent credentials — never commit real tokens.
+# Keep the template so contributors know the schema.
+eigenflux/credentials/*.json
+!eigenflux/credentials/template.json
+
+# Misc local secret dumps — never commit.
+aliap_login_email_token.csv
+*_login_*token*.csv
