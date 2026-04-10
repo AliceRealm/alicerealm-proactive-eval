@@ -2,7 +2,7 @@
   "pairs": [
     {
       "fixture": "careful_operator_v1",
-      "episode": "stock_watch_001",
+      "scenario": "stock_watch_001",
       "description": "Sam @ Stratwise — hobby trader, plain language. Sold half TSM waiting re-entry ~$150, NVDA long but nervous on valuation, Xiaomi new on watchlist for EV. Wants only material catalysts.",
       "queries": [
         "NVIDIA NVDA earnings report date Q2 2026",
@@ -21,7 +21,7 @@
     },
     {
       "fixture": "executive_finisher_v1",
-      "episode": "deal_flow_001",
+      "scenario": "deal_flow_001",
       "description": "Felix @ Meridian — CEO, just closed Series A (Bright Harbor). Closing Japan distribution deal, Korean competing bid, competitor Arcline hired BD in Tokyo. Supply chain ops background.",
       "queries": [
         "Japan import tariff policy changes April 2026",
@@ -40,7 +40,7 @@
     },
     {
       "fixture": "social_scout_v1",
-      "episode": "network_scan_001",
+      "scenario": "network_scan_001",
       "description": "Elena @ Canopy — co-founder (growth/community/partnerships). Launching dev tools beta, finding early adopters in AI agent space. Watches Karpathy + Swyx, Toolchain Labs adjacent. Wants organic intros not cold pitches.",
       "queries": [
         "Karpathy latest tweet post AI agents April 2026",
@@ -59,7 +59,7 @@
     },
     {
       "fixture": "research_librarian_v1",
-      "episode": "research_digest_001",
+      "scenario": "research_digest_001",
       "description": "Mika @ Lumen — senior strategist writing CEO memo on on-device inference reshaping mobile. Assumes NPU closes gap in 18mo, Apple gating access. Tracking Apple WWDC, Qualcomm keynote, Meta sub-2B paper.",
       "queries": [
         "Apple on-device AI model WWDC 2026 leak rumor",
@@ -78,7 +78,7 @@
     },
     {
       "fixture": "content_strategist_v1",
-      "episode": "discourse_watch_001",
+      "scenario": "discourse_watch_001",
       "description": "Nora — independent behavioral science newsletter writer. Tracking replication crisis (priming studies), nudge ethics in fintech/health apps, dark patterns regulation (FTC/EU). Wants differentiated angles, not mainstream takes.",
       "queries": [
         "replication crisis psychology priming study failed 2026",
@@ -97,7 +97,7 @@
     },
     {
       "fixture": "learning_curator_v1",
-      "episode": "learning_session_001",
+      "scenario": "learning_session_001",
       "description": "Leo — biotech ops head (Helix Therapeutics), MBA, self-studying molecular biology. Needs CRISPR editing types comparison (knockout vs base vs prime), LNP vs AAV gene therapy delivery tradeoffs, and accessible clinical application examples.",
       "queries": [
         "CRISPR knockout vs base editing vs prime editing comparison",
