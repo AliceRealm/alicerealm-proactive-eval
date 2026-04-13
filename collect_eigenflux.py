@@ -182,20 +182,37 @@ def push_profile(token: str, profile: dict):
         print(f"  Profile update failed: {resp}")
 
 
-def do_profile_all(fixtures: list[dict]):
-    """Push profiles for all fixtures that have credentials."""
-    print("=== Pushing Profiles ===\n")
+def sync_profiles(fixtures: list[dict]) -> dict:
+    """Push every fixture's eigenflux_profile to the live agent.
+
+    Returns a small summary dict {pushed, skipped_no_profile, skipped_no_creds}.
+    Used both by `--profile` (one-shot) and by collection startup (auto-sync),
+    so the line agent's profile is always in sync with the fixture file before
+    any feed is pulled. Without this, editing a fixture's bio and re-running
+    collection would silently pull feed against a stale profile.
+    """
+    summary = {"pushed": 0, "skipped_no_profile": 0, "skipped_no_creds": 0}
     for fix in fixtures:
         fid = fix["fixture_id"]
         profile = fix.get("eigenflux_profile")
         if not profile:
             print(f"  {fid}: no eigenflux_profile in fixture, skipped")
+            summary["skipped_no_profile"] += 1
             continue
         token = load_token(fid)
         if not token:
             print(f"  {fid}: no credentials, skipped")
+            summary["skipped_no_creds"] += 1
             continue
         push_profile(token, profile)
+        summary["pushed"] += 1
+    return summary
+
+
+def do_profile_all(fixtures: list[dict]):
+    """One-shot CLI entry point: `python3 collect_eigenflux.py --profile`."""
+    print("=== Pushing Profiles ===\n")
+    sync_profiles(fixtures)
     print("\n=== Done ===")
 
 
@@ -304,6 +321,9 @@ def main():
                         help="Pull once and exit")
     parser.add_argument("--dry-run", action="store_true",
                         help="Show what would happen without API calls")
+    parser.add_argument("--skip-profile-sync", action="store_true",
+                        help="Do not push fixture profiles to EigenFlux at startup "
+                             "(by default profiles are auto-synced before the first cycle)")
     args = parser.parse_args()
 
     all_fixtures = load_fixtures()
@@ -343,6 +363,17 @@ def main():
     print(f"Fixtures: {len(fixtures)} ({', '.join(fixture_names)})")
     print(f"Interval: {args.interval}min | Mode: {mode}")
     print()
+
+    # Auto-sync profiles before any pull, so the line agent's profile always
+    # matches the fixture file. Skip in dry-run (no real API calls allowed)
+    # and when the user explicitly opts out.
+    if not args.dry_run and not args.skip_profile_sync:
+        print("=== Syncing fixture profiles to EigenFlux ===")
+        summary = sync_profiles(fixtures)
+        print(f"  pushed={summary['pushed']} "
+              f"skipped_no_profile={summary['skipped_no_profile']} "
+              f"skipped_no_creds={summary['skipped_no_creds']}")
+        print()
 
     cycle = 0
     while True:
