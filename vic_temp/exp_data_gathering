@@ -1,0 +1,14 @@
+"
+"	Item count	Send rate	Send count	Action rate 	Action count
+Sable - with eigenflux	1795	4.50%	80.775	0.00%	0
+Sable - without eigenflux	160	20.60%	32.96	0.00%	0
+Nova - with eigenflux	1646	16.50%	271.59	0.50%	8.23
+Nova - without eigenflux	184	27.70%	50.968	3.80%	6.992
+Flint - with eigenflux	1468	19.50%	286.26	1.00%	14.68
+Flint - without eigenflux	319	16.00%	51.04	1.00%	3.19
+Lark - with eigenflux	1696	5.00%	84.8	0.00%	0
+Lark - without eigenflux	155	36.80%	57.04	5.20%	8.06
+Mist - with eigenflux	1483	20.00%	296.6	0.50%	7.415
+Mist - without eigenflux	163	30.10%	49.063	2.50%	4.075
+Ember - with eigenflux	1508	28.00%	422.24	0.00%	0
+Ember - without eigenflux	338	25.00%	84.5	0.00%	0
