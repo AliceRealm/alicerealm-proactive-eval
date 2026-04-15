@@ -24,6 +24,19 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 EXPERIMENTS_DIR = SCRIPT_DIR / "data" / "experiments"
 DEFAULT_PORT = 8420
 
+FIXTURE_NAMES = {
+    "careful_operator_v1": "Careful Operator (Sable)",
+    "executive_finisher_v1": "Executive Finisher (Flint)",
+    "social_scout_v1": "Social Scout (Ember)",
+    "research_librarian_v1": "Research Librarian (Mist)",
+    "content_strategist_v1": "Content Strategist (Nova)",
+    "learning_curator_v1": "Learning Curator (Lark)",
+}
+
+
+def _fixture_name(fid: str) -> str:
+    return FIXTURE_NAMES.get(fid, fid.replace("_v1", "").replace("_", " ").title())
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -38,8 +51,8 @@ def _wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float, f
     return p_hat, max(0.0, centre - margin), min(1.0, centre + margin)
 
 
-def _backfill_summary(summary: dict):
-    """Ensure send_rate/action_rate and their CIs exist, computing from decisions dict if needed."""
+def _backfill_summary(summary: dict, config: dict | None = None):
+    """Ensure all derived fields exist, computing from decisions dict if needed."""
     n = summary.get("sample_size", summary.get("items_processed", 0))
     d = summary.get("decisions", {})
     send_count = d.get("send", 0) + d.get("send_with_action", 0)
@@ -60,6 +73,31 @@ def _backfill_summary(summary: dict):
     if summary.get("sample_size") is None:
         summary["sample_size"] = n
 
+    if summary.get("quality_per_item") is None:
+        q = (send_count - action_count) * 1 + action_count * 3
+        summary["quality_total"] = q
+        summary["quality_per_item"] = round(q / n, 4) if n else 0
+
+    if summary.get("daily_yield") is None:
+        pop = summary.get("population_size", n)
+        days = 1.0
+        if config:
+            start = config.get("start")
+            end = config.get("end")
+            if start and end:
+                try:
+                    from datetime import datetime, timezone
+                    d0 = datetime.fromisoformat(start)
+                    d1 = datetime.fromisoformat(end)
+                    if d0.tzinfo is None:
+                        d0 = d0.replace(tzinfo=timezone.utc)
+                    if d1.tzinfo is None:
+                        d1 = d1.replace(tzinfo=timezone.utc)
+                    days = max((d1 - d0).total_seconds() / 86400, 0.01)
+                except Exception:
+                    pass
+        summary["daily_yield"] = round(pop / days, 1)
+
 
 def load_experiment(exp_dir: Path, include_decisions: bool = True) -> dict:
     """Load config.json and all summary files from an experiment directory.
@@ -78,7 +116,7 @@ def load_experiment(exp_dir: Path, include_decisions: bool = True) -> dict:
         for summary_file in sorted(child.glob("*.summary.json")):
             run_label = summary_file.name.replace(".summary.json", "")
             summary = json.loads(summary_file.read_text())
-            _backfill_summary(summary)
+            _backfill_summary(summary, config)
             decisions = []
             if include_decisions:
                 jsonl_path = child / f"{run_label}.jsonl"
@@ -293,7 +331,7 @@ def _ci_chart_html(fixtures: dict, labels: list[str],
 
     rows_html = []
     for fid in sorted(data.keys()):
-        short = fid.replace("_v1", "")
+        short = _fixture_name(fid)
         entries = data[fid]
         if len(entries) < 2:
             continue
@@ -347,6 +385,165 @@ def _ci_chart_html(fixtures: dict, labels: list[str],
     )
 
 
+def _gauge_html(val: float, target: float, max_val: float | None = None,
+                label: str = "") -> str:
+    if max_val is None:
+        max_val = target * 2.5
+    pct = min(val / max_val * 100, 100) if max_val else 0
+    target_pct = min(target / max_val * 100, 100) if max_val else 0
+    color = "var(--green)" if val >= target else "var(--yellow)" if val >= target * 0.7 else "var(--red)"
+    return (
+        f'<div style="position:relative;height:26px;background:var(--row-alt);'
+        f'border-radius:4px;border:1px solid var(--border);overflow:hidden">'
+        f'<div style="height:100%;width:{pct:.0f}%;background:{color};opacity:0.3"></div>'
+        f'<div style="position:absolute;left:{target_pct:.0f}%;top:0;bottom:0;'
+        f'width:2px;background:var(--fg);opacity:0.4" title="target: {target}"></div>'
+        f'<div style="position:absolute;left:8px;top:4px;font-size:0.8em;font-weight:600">'
+        f'{label}</div></div>'
+    )
+
+
+def _targets_html(fixtures: dict, labels: list[str],
+                  daily_target: float, send_rate_target: float) -> str:
+    """Render side-by-side comparison of sources against baselines."""
+    # Collect per-label aggregates
+    agg = {}
+    for l in labels:
+        dailys, send_rates, action_rates, quality_per_items = [], [], [], []
+        for fid in sorted(fixtures.keys()):
+            runs = fixtures[fid]
+            if l not in runs:
+                continue
+            s = runs[l]["summary"]
+            dailys.append(s.get("daily_yield", 0))
+            send_rates.append(s.get("send_rate", 0))
+            action_rates.append(s.get("action_rate", 0))
+            quality_per_items.append(s.get("quality_per_item", 0))
+        n = len(dailys) or 1
+        agg[l] = {
+            "daily": sum(dailys) / n,
+            "send_rate": sum(send_rates) / n,
+            "action_rate": sum(action_rates) / n,
+            "quality": sum(quality_per_items) / n,
+        }
+
+    # Baselines
+    # send_rate = send + action combined, target 70%
+    # action_rate is a subset, target 15%
+    # quality = (send_rate - action_rate)*1 + action_rate*3
+    action_baseline = 0.15
+    quality_baseline = (send_rate_target - action_baseline) * 1 + action_baseline * 3
+    baselines = {
+        "daily": daily_target,
+        "send_rate": send_rate_target,
+        "action_rate": action_baseline,
+        "quality": quality_baseline,
+    }
+
+    # Bar chart comparison
+    metrics = [
+        ("Daily Yield", "daily", "/day", 1),
+        ("Send Rate", "send_rate", "%", 100),
+        ("Action Rate", "action_rate", "%", 100),
+        ("Quality", "quality", "", 1),
+    ]
+
+    colors = {}
+    for l in labels:
+        colors[l] = "#3b82f6" if "search" in l else "#f97316"
+
+    chart_w = 700
+    charts_html = []
+
+    for name, key, unit, multiplier in metrics:
+        baseline = baselines[key] * multiplier
+        vals = {l: agg[l][key] * multiplier for l in labels}
+        max_val = max(max(vals.values()) if vals else 0, baseline) * 1.3 or 1
+
+        bar_h = 28
+        gap = 6
+        chart_h = len(labels) * (bar_h + gap) + 30  # +30 for axis
+        label_w = 110
+        plot_w = chart_w - label_w - 20
+
+        svg_parts = [f'<svg width="{chart_w}" height="{chart_h}" style="display:block">']
+
+        for i, l in enumerate(labels):
+            v = vals[l]
+            bar_w = max(2, v / max_val * plot_w)
+            y = i * (bar_h + gap)
+            color = colors.get(l, "#999")
+
+            # Label
+            short_l = l.replace("_only", "")
+            svg_parts.append(
+                f'<text x="{label_w - 5}" y="{y + bar_h/2 + 4}" '
+                f'text-anchor="end" font-size="11" fill="var(--fg)">{short_l}</text>'
+            )
+            # Bar
+            svg_parts.append(
+                f'<rect x="{label_w}" y="{y}" width="{bar_w:.0f}" height="{bar_h}" '
+                f'rx="3" fill="{color}" opacity="0.7"/>'
+            )
+            # Value label
+            svg_parts.append(
+                f'<text x="{label_w + bar_w + 5}" y="{y + bar_h/2 + 4}" '
+                f'font-size="11" font-weight="600" fill="var(--fg)">'
+                f'{v:.1f}{unit}</text>'
+            )
+
+        # Baseline line
+        baseline_x = label_w + baseline / max_val * plot_w
+        total_bar_h = len(labels) * (bar_h + gap) - gap
+        svg_parts.append(
+            f'<line x1="{baseline_x:.0f}" y1="0" x2="{baseline_x:.0f}" y2="{total_bar_h}" '
+            f'stroke="var(--fg)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.5"/>'
+        )
+        svg_parts.append(
+            f'<text x="{baseline_x:.0f}" y="{total_bar_h + 14}" text-anchor="middle" '
+            f'font-size="10" fill="var(--muted)">baseline: {baseline:.0f}{unit}</text>'
+        )
+
+        # Delta
+        delta_html = ""
+        if len(labels) == 2:
+            va, vb = vals[labels[0]], vals[labels[1]]
+            delta = va - vb
+            sign = "+" if delta > 0 else ""
+            color_d = "var(--green)" if delta > 0 else "var(--red)" if delta < 0 else "var(--muted)"
+            delta_html = (f'<span style="font-size:0.85em;font-weight:600;color:{color_d};'
+                          f'margin-left:12px">&Delta; {sign}{delta:.1f}{unit}</span>')
+
+        svg_parts.append('</svg>')
+
+        charts_html.append(
+            f'<div style="margin-bottom:1.2em">'
+            f'<div style="font-weight:600;font-size:0.9em;margin-bottom:2px">'
+            f'{name}{delta_html}</div>'
+            f'{"".join(svg_parts)}'
+            f'</div>'
+        )
+
+    # Legend
+    legend_parts = []
+    for l in labels:
+        c = colors.get(l, "#999")
+        short_l = l.replace("_only", "")
+        legend_parts.append(
+            f'<span style="margin-right:1.2em">'
+            f'<span style="display:inline-block;width:12px;height:12px;background:{c};'
+            f'border-radius:2px;vertical-align:middle;margin-right:4px"></span>{short_l}</span>'
+        )
+    legend_parts.append(
+        '<span style="color:var(--muted)">┆ = baseline target</span>'
+    )
+
+    return (
+        f'<div style="font-size:0.85em;margin-bottom:0.5em">{"".join(legend_parts)}</div>'
+        + "".join(charts_html)
+    )
+
+
 def generate_experiment_html(exp: dict) -> str:
     fixtures = exp.get("_fixtures", {})
     eid = exp.get("experiment_id", "?")
@@ -357,6 +554,11 @@ def generate_experiment_html(exp: dict) -> str:
     labels = sorted(all_labels)
 
     # --- Per-fixture comparison cards ---
+    targets = exp.get("targets", {})
+    daily_target = targets.get("daily_sends", 15)
+    send_rate_target = targets.get("send_rate", 0.70)
+    action_rate_target = targets.get("action_rate", 0.15)
+
     def _col_html(s: dict, label: str) -> str:
         d = s["decisions"]
         total = s["items_processed"]
@@ -368,22 +570,37 @@ def generate_experiment_html(exp: dict) -> str:
 
         sr = s.get("send_rate", 0)
         sci = s.get("send_rate_ci95", [0, 0])
+        daily = s.get("daily_yield", 0)
+
+        bar = _bar_html(skip, send, send_action, width_px=140)
+
         ar = s.get("action_rate", 0)
         aci = s.get("action_rate_ci95", [0, 0])
 
-        bar = _bar_html(skip, send, send_action, width_px=140)
+        # Quality per item: skip=0, send=1, action=3. Target=1.0
+        qpi = s.get("quality_per_item", 0)
+        if not qpi and total:
+            qpi = ((send - send_action) * 1 + send_action * 3) / total
+        quality_baseline = (send_rate_target - action_rate_target) * 1 + action_rate_target * 3
+
+        daily_gauge = _gauge_html(daily, daily_target,
+                                  label=f'{daily:.1f}/day (baseline: {daily_target})')
+        send_gauge = _gauge_html(sr * 100, send_rate_target * 100, max_val=100,
+                                 label=f'{sr*100:.1f}% [{sci[0]*100:.0f}, {sci[1]*100:.0f}]')
+        action_gauge = _gauge_html(ar * 100, action_rate_target * 100, max_val=50,
+                                   label=f'{ar*100:.1f}% [{aci[0]*100:.0f}, {aci[1]*100:.0f}]')
+        quality_gauge = _gauge_html(qpi, quality_baseline, max_val=3.0,
+                                    label=f'{qpi:.2f} (baseline: {quality_baseline:.1f})')
 
         return (
             f'<div class="fixture-col">'
             f'<h4>{_esc(label)}</h4>'
             f'<div class="stat-grid">'
             f'<span class="stat-label">Sample (n/N)</span><span class="stat-val">{n_str}</span>'
-            f'<span class="stat-label">Send Rate</span>'
-            f'<span class="stat-val highlight">{sr*100:.1f}%'
-            f' <span style="font-weight:400;font-size:0.8em;color:var(--muted)">[{sci[0]*100:.1f}, {sci[1]*100:.1f}]</span></span>'
-            f'<span class="stat-label">Action Rate</span>'
-            f'<span class="stat-val highlight">{ar*100:.1f}%'
-            f' <span style="font-weight:400;font-size:0.8em;color:var(--muted)">[{aci[0]*100:.1f}, {aci[1]*100:.1f}]</span></span>'
+            f'<span class="stat-label">Daily Yield</span><span>{daily_gauge}</span>'
+            f'<span class="stat-label">Send Rate</span><span>{send_gauge}</span>'
+            f'<span class="stat-label">Action Rate</span><span>{action_gauge}</span>'
+            f'<span class="stat-label">Quality</span><span>{quality_gauge}</span>'
             f'<span class="stat-label">Skip / Send / Action</span>'
             f'<span class="stat-val">{skip} / {send} / {send_action}</span>'
             f'<span class="stat-label">Distribution</span><span>{bar}</span>'
@@ -412,7 +629,7 @@ def generate_experiment_html(exp: dict) -> str:
         runs = fixtures[fid]
         if not runs:
             continue
-        short = fid.replace("_v1", "")
+        short = _fixture_name(fid)
 
         # Build header badges
         badges = ""
@@ -444,35 +661,230 @@ def generate_experiment_html(exp: dict) -> str:
             f'</div>'
         )
 
-    # --- Sent items table ---
-    send_rows = []
+    # --- Time-series charts (running metrics over time) ---
+    def _build_running_series(decisions: list[dict]) -> dict:
+        """Compute running send_rate, action_rate, quality as each item arrives."""
+        sorted_d = sorted(decisions, key=lambda x: x.get("pull_timestamp", ""))
+        total = sends = actions = quality_pts = 0
+        series = {"send_rate": [], "action_rate": [], "quality": []}
+        for d in sorted_d:
+            ts = d.get("pull_timestamp", "")
+            total += 1
+            action = d.get("decision", {}).get("action", "skip")
+            if action == "send":
+                sends += 1
+                quality_pts += 1
+            elif action == "send_with_action":
+                sends += 1
+                actions += 1
+                quality_pts += 3
+            series["send_rate"].append((ts, sends / total))
+            series["action_rate"].append((ts, actions / total))
+            series["quality"].append((ts, quality_pts / total))
+        return series
+
+    def _svg_line_chart(all_series: dict, y_max: float, baseline: float | None,
+                        title: str, y_label: str, w: int = 650, h: int = 180) -> str:
+        """Render an SVG line chart. all_series = {label: [(ts, val), ...]}"""
+        pad_l, pad_r, pad_t, pad_b = 45, 20, 12, 28
+        colors_map = {}
+        for l in all_series:
+            colors_map[l] = "#3b82f6" if "search" in l else "#f97316"
+
+        # Collect all timestamps for x-axis
+        all_ts = sorted(set(ts for pts in all_series.values() for ts, _ in pts if ts))
+        if not all_ts:
+            return ""
+        t_min, t_max = all_ts[0], all_ts[-1]
+
+        def tx(ts_str):
+            if t_min == t_max:
+                return pad_l
+            idx = 0
+            for i, t in enumerate(all_ts):
+                if t <= ts_str:
+                    idx = i
+            return pad_l + (idx / max(1, len(all_ts) - 1)) * (w - pad_l - pad_r)
+
+        def ty(v):
+            return pad_t + (1 - v / y_max) * (h - pad_t - pad_b)
+
+        svg = [f'<svg width="{w}" height="{h}" style="background:var(--bg);'
+               f'border:1px solid var(--border);border-radius:6px">']
+
+        # Grid
+        steps = [i / 10 for i in range(int(y_max * 10) + 1) if i % max(1, int(y_max * 10 / 4)) == 0]
+        if not steps:
+            steps = [0, y_max / 2, y_max]
+        for v in steps:
+            y = ty(v)
+            svg.append(f'<line x1="{pad_l}" y1="{y:.0f}" x2="{w-pad_r}" y2="{y:.0f}" '
+                       f'stroke="var(--border)" stroke-width="0.5"/>'
+                       f'<text x="{pad_l-4}" y="{y+4:.0f}" text-anchor="end" '
+                       f'font-size="9" fill="var(--muted)">{v:.1f}</text>')
+
+        # Baseline
+        if baseline is not None and 0 <= baseline <= y_max:
+            by = ty(baseline)
+            svg.append(f'<line x1="{pad_l}" y1="{by:.0f}" x2="{w-pad_r}" y2="{by:.0f}" '
+                       f'stroke="var(--fg)" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>'
+                       f'<text x="{w-pad_r+2}" y="{by+3:.0f}" font-size="8" fill="var(--muted)">baseline</text>')
+
+        # Time labels
+        def _short_ts(ts):
+            return ts[11:16] if len(ts) > 16 else ts[:10]
+        svg.append(f'<text x="{pad_l}" y="{h-5}" font-size="8" fill="var(--muted)">{_short_ts(t_min)}</text>'
+                   f'<text x="{w-pad_r}" y="{h-5}" text-anchor="end" font-size="8" fill="var(--muted)">{_short_ts(t_max)}</text>')
+
+        # Lines
+        for l, pts in all_series.items():
+            if not pts:
+                continue
+            path_d = []
+            for i, (ts, v) in enumerate(pts):
+                x, y = tx(ts), ty(min(v, y_max))
+                path_d.append(f"{'M' if i == 0 else 'L'}{x:.1f},{y:.1f}")
+            svg.append(f'<path d="{"".join(path_d)}" fill="none" stroke="{colors_map[l]}" '
+                       f'stroke-width="2" stroke-linejoin="round"/>')
+            # End value
+            if pts:
+                last_v = pts[-1][1]
+                lx, ly = tx(pts[-1][0]), ty(min(last_v, y_max))
+                svg.append(f'<circle cx="{lx:.0f}" cy="{ly:.0f}" r="3" fill="{colors_map[l]}"/>')
+
+        svg.append('</svg>')
+        return "".join(svg)
+
+    ts_metric_defs = [
+        ("Running Send Rate", "send_rate", 1.0, send_rate_target),
+        ("Running Action Rate", "action_rate", 0.5, action_rate_target),
+        ("Running Quality", "quality", 3.0,
+         (send_rate_target - action_rate_target) * 1 + action_rate_target * 3),
+    ]
+
+    timeseries_sections = []
     for fid in sorted(fixtures.keys()):
         runs = fixtures[fid]
+        if not all(l in runs for l in labels):
+            continue
+        charts_for_fixture = []
+        for chart_title, metric_key, y_max, baseline_val in ts_metric_defs:
+            all_s = {}
+            for l in labels:
+                decisions = runs[l].get("decisions", [])
+                if not decisions:
+                    continue
+                rs = _build_running_series(decisions)
+                all_s[l] = rs.get(metric_key, [])
+            if all_s:
+                svg = _svg_line_chart(all_s, y_max, baseline_val, chart_title, metric_key)
+                charts_for_fixture.append(
+                    f'<div style="flex:1;min-width:300px">'
+                    f'<div style="font-size:0.8em;font-weight:600;margin-bottom:2px">{chart_title}</div>'
+                    f'{svg}</div>'
+                )
+        if charts_for_fixture:
+            timeseries_sections.append(
+                f'<div style="margin:1.2em 0">'
+                f'<div style="font-weight:600;font-size:0.9em;margin-bottom:6px">{_esc(_fixture_name(fid))}</div>'
+                f'<div style="display:flex;gap:12px;flex-wrap:wrap">{"".join(charts_for_fixture)}</div>'
+                f'</div>'
+            )
+
+    # --- Sent items grouped by fixture, side-by-side ---
+    total_sends = 0
+    sent_sections = []
+    for fid in sorted(fixtures.keys()):
+        runs = fixtures[fid]
+        has_sends = any(
+            d.get("decision", {}).get("action") in ("send", "send_with_action")
+            for l in labels if l in runs
+            for d in runs[l].get("decisions", [])
+        )
+        if not has_sends:
+            continue
+
+        fixture_cols = []
         for l in labels:
             if l not in runs:
+                fixture_cols.append(f'<div class="fixture-col"><h4>{_esc(l)}</h4><span class="stat-label">No data</span></div>')
                 continue
-            for d in runs[l]["decisions"]:
+
+            all_decisions = runs[l].get("decisions", [])
+            sends = [d for d in all_decisions
+                     if d.get("decision", {}).get("action") in ("send", "send_with_action")]
+            total_sends += len(sends)
+
+            cards = []
+            for d in sends:
                 action = d["decision"]["action"]
-                if action not in ("send", "send_with_action"):
-                    continue
                 tag_cls = "tag-send" if action == "send" else "tag-action"
-                tag_text = "send" if action == "send" else "send+action"
-                preview = _esc(d["content_preview"][:120].replace("\n", " "))
-                rationale = _esc(d["decision"].get("rationale", "")[:300])
-                message = _esc((d["decision"].get("message") or "")[:300])
-                rec = ""
+                tag_text = "SEND" if action == "send" else "ACTION"
+                ts = d.get("pull_timestamp", "")
+                short_ts = ts[5:16] if len(ts) > 16 else ts
+
+                # Content from raw_item for full detail
+                raw = d.get("raw_item", {})
+                title = _esc(raw.get("title") or raw.get("summary", "")[:80] or "")
+                body = _esc(raw.get("body") or raw.get("content", "")[:200] or d.get("content_preview", "")[:200])
+                url = raw.get("href") or raw.get("url") or ""
+
+                rationale = _esc(d["decision"].get("rationale", ""))
+                message = _esc(d["decision"].get("message") or "")
+
+                # Recommended action
+                rec_html = ""
                 if action == "send_with_action":
                     ra = d["decision"].get("recommended_action") or {}
-                    rec = f"<br><b>Action:</b> {_esc(ra.get('title',''))} — {_esc(ra.get('details','')[:200])}"
+                    rec_html = (
+                        f'<div style="margin-top:6px;padding:6px 8px;background:var(--header-bg);'
+                        f'border-radius:4px;border-left:3px solid var(--yellow)">'
+                        f'<div style="font-weight:600;font-size:0.85em">{_esc(ra.get("title", ""))}</div>'
+                        f'<div style="font-size:0.8em;color:var(--muted)">{_esc(ra.get("details", ""))}</div>'
+                        f'</div>'
+                    )
 
-                send_rows.append(
-                    f'<tr class="send-row"><td>{_esc(fid)}</td><td>{_esc(l)}</td>'
-                    f'<td><span class="tag {tag_cls}">{tag_text}</span></td>'
-                    f'<td>{preview}</td></tr>\n'
-                    f'<tr class="detail"><td colspan="4">'
-                    f'<b>Rationale:</b> {rationale}<br>'
-                    f'<b>Message:</b> {message}{rec}</td></tr>'
+                cards.append(
+                    f'<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden">'
+                    # Header bar
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                    f'padding:4px 10px;background:var(--header-bg);border-bottom:1px solid var(--border)">'
+                    f'<span class="tag {tag_cls}">{tag_text}</span>'
+                    f'<span style="font-size:0.75em;color:var(--muted)">{short_ts}</span></div>'
+                    # Content
+                    f'<div style="padding:8px 10px">'
+                    f'<div style="font-weight:600;font-size:0.9em;margin-bottom:4px">{title}</div>'
+                    f'<div style="font-size:0.8em;color:var(--muted);margin-bottom:6px">{body}</div>'
+                    # Agent's message
+                    f'<div style="padding:6px 8px;background:var(--row-alt);border-radius:4px;'
+                    f'font-size:0.85em;margin-bottom:4px;border-left:3px solid var(--accent)">{message}</div>'
+                    # Rationale (collapsed by default)
+                    f'<details style="font-size:0.8em;color:var(--muted)">'
+                    f'<summary style="cursor:pointer">Why this was sent</summary>'
+                    f'<div style="margin-top:4px">{rationale}</div></details>'
+                    f'{rec_html}'
+                    f'</div></div>'
                 )
+
+            s = runs[l]["summary"]
+            send_count = s["decisions"]["send"]
+            action_count = s["decisions"]["send_with_action"]
+            col_header = (f'<h4>{_esc(l)}'
+                          f' <span style="font-weight:400;font-size:0.8em;color:var(--muted)">'
+                          f'{send_count} send + {action_count} action</span></h4>')
+            fixture_cols.append(
+                f'<div class="fixture-col" style="max-height:600px;overflow-y:auto">'
+                f'{col_header}'
+                f'{"".join(cards) if cards else "<span class=&quot;stat-label&quot;>No sends</span>"}'
+                f'</div>'
+            )
+
+        sent_sections.append(
+            f'<div class="fixture-card">'
+            f'<div class="fixture-header"><span>{_esc(_fixture_name(fid))}</span></div>'
+            f'<div class="fixture-body">{"".join(fixture_cols)}</div>'
+            f'</div>'
+        )
 
     # --- All experiments nav ---
     all_exps = list_experiments()
@@ -500,10 +912,22 @@ def generate_experiment_html(exp: dict) -> str:
   <span>Range: <b>{_esc(str(exp.get('start') or '(open)'))} &rarr; {_esc(str(exp.get('end') or '(open)'))}</b></span>
   <span>Sample: <b>{exp.get('sample') or 'all'}</b> (seed={exp.get('seed', '—')})</span>
   <span>Workers: <b>{exp.get('workers', '—')}</b></span>
+  <span>Dedup: <b>{"semantic (cosine≥0.70)" if exp.get("semantic_dedup", False) else "URL only"}</b></span>
   <span>Duration: <b>{_format_duration(exp.get('started_at'), exp.get('finished_at'))[0]}</b></span>
   {"<span><b>DRY RUN</b></span>" if exp.get('dry_run') else ""}
   {"<span style='color:var(--yellow)'><b>INCOMPLETE</b></span>" if not exp.get('finished_at') else ""}
 </p>
+
+<h2>Product Targets</h2>
+<p style="font-size:0.85em;color:var(--muted);line-height:1.8">
+  <b>Quality</b> = (n<sub>send</sub> &times; 1 + n<sub>action</sub> &times; 3) / n<sub>total</sub>
+  &nbsp;&nbsp;|&nbsp;&nbsp; skip = 0 pts, send = 1 pt, action = 3 pts<br>
+  <b>Baselines</b>: daily yield ≥ {daily_target},
+  send+action rate ≥ {send_rate_target*100:.0f}%,
+  action rate ≥ {action_rate_target*100:.0f}%,
+  quality ≥ {(send_rate_target - action_rate_target)*1 + action_rate_target*3:.1f}
+</p>
+{_targets_html(fixtures, labels, daily_target, send_rate_target)}
 
 <h2>Per-Fixture Comparison</h2>
 <p style="font-size:0.8em;color:var(--muted)">
@@ -517,18 +941,14 @@ def generate_experiment_html(exp: dict) -> str:
 </p>
 {"".join(fixture_cards)}
 
-<h2>Send Rate Overview (95% CI)</h2>
-{_ci_chart_html(fixtures, labels, "send_rate", "send_rate_ci95")}
+<h2>Metrics Over Time</h2>
+<p style="font-size:0.8em;color:var(--muted)">Running averages as items are processed chronologically. Dashed line = baseline target. Convergence shows stability of the estimate.</p>
+{"".join(timeseries_sections)}
 
-<h2>Action Rate Overview (95% CI)</h2>
-{_ci_chart_html(fixtures, labels, "action_rate", "action_rate_ci95")}
 
-<h2>Sent Items ({len(send_rows)})</h2>
-<p style="font-size:0.8em;color:var(--muted)">Click a row to expand details.</p>
-<table>
-<tr><th>Fixture</th><th>Source</th><th>Action</th><th>Content Preview</th></tr>
-{"".join(send_rows)}
-</table>
+<h2>Sent Items ({total_sends})</h2>
+<p style="font-size:0.8em;color:var(--muted)">Grouped by fixture and source. Click a row to expand full rationale and message.</p>
+{"".join(sent_sections)}
 
 <script>{_JS}</script>
 </body></html>"""
@@ -563,6 +983,7 @@ def generate_index_html() -> str:
         eid = e.get("experiment_id", "?")
         dry = " [dry]" if e.get("dry_run") else ""
         sample_str = str(e.get("sample")) if e.get("sample") else "all"
+        dedup_str = "semantic" if e.get("semantic_dedup", False) else "URL"
         duration, complete = _format_duration(e.get("started_at"), e.get("finished_at"))
         status = f'<span style="color:var(--green)">{duration}</span>' if complete \
             else f'<span style="color:var(--yellow)">{duration}</span>'
@@ -576,6 +997,7 @@ def generate_index_html() -> str:
             f'<td>{_esc(str(e.get("source","?")))}</td>'
             f'<td>{_esc(str(e.get("start") or "?"))} &rarr; {_esc(str(e.get("end") or "?"))}</td>'
             f'<td>{sample_str}</td>'
+            f'<td>{dedup_str}</td>'
             f'<td>{len(e.get("fixtures",[]))}</td>'
             f'<td>{status}</td>'
             f'<td>{del_btn}</td></tr>'
@@ -593,7 +1015,7 @@ function deleteExp(eid) {
 <style>{_CSS}</style></head><body>
 <h1>Proactive Eval — Experiments</h1>
 <table>
-<tr><th>Experiment</th><th>Model</th><th>Source</th><th>Time Range</th><th>Sample</th><th>Fixtures</th><th>Duration</th><th></th></tr>
+<tr><th>Experiment</th><th>Model</th><th>Source</th><th>Time Range</th><th>Sample</th><th>Dedup</th><th>Fixtures</th><th>Duration</th><th></th></tr>
 {"".join(rows)}
 </table>
 <script>{delete_js}</script>
