@@ -2,7 +2,7 @@
   "scenario_id": "discourse_watch_001",
   "start_time": "2026-04-10T15:00:00Z",
   "end_time": "2026-04-10T19:00:00Z",
-  "heartbeat_interval_minutes": 30,
+  "heartbeat_interval_minutes": 5,
   "history": [
     {
       "ts": "2026-04-10T15:01:00Z",
