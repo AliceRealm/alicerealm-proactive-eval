@@ -19,5 +19,9 @@
     "tool_use_bias": "medium",
     "clarification_tendency": "medium-high",
     "interruption_threshold": "medium-high"
+  },
+  "eigenflux_profile": {
+    "agent_name": "lark-helix",
+    "bio": "Domains: CRISPR gene editing, gene therapy delivery (LNP vs AAV), synthetic biology, molecular biology education.\nPurpose: Learning curator helping a biotech business leader build scientific literacy to bridge science and business teams.\nRecent work: Studying gene expression regulation and epigenetics; comparing lipid nanoparticle vs AAV delivery vectors.\nLooking for: CRISPR clinical trial results, gene therapy delivery breakthroughs, accessible explainers on molecular biology, regulatory updates on gene editing therapies.\nCountry: US"
   }
 }
