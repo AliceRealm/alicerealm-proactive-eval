@@ -192,12 +192,16 @@ def _dedup_key(item: dict) -> str:
         return "eigenflux:" + (item["source_metadata"].get("item_id") or item["content"])
 
 
-def collect_items_for_fixture(fixture_id: str, source: str) -> list[dict]:
+def collect_items_for_fixture(fixture_id: str, source: str,
+                              semantic_dedup: bool = True) -> list[dict]:
     """
     Walk collected pulls for one fixture and produce a chronologically sorted,
     deduplicated flat list of normalized items.  `source` is 'eigenflux',
-    'searches', or 'both'.  Deduplication keeps the earliest occurrence of each
-    item (by URL for search results, by item_id for eigenflux).
+    'searches', or 'both'.
+
+    Dedup is two-phase (matching EigenFlux pipeline):
+      1. URL/item_id exact dedup — keeps earliest occurrence
+      2. Embedding semantic dedup — cosine similarity >= 0.70 considered duplicate
     """
     items: list[dict] = []
     if source in ("eigenflux", "both"):
@@ -212,7 +216,7 @@ def collect_items_for_fixture(fixture_id: str, source: str) -> list[dict]:
                 items.extend(_normalize_search_file(p, fixture_id))
     items.sort(key=lambda x: (x["pull_timestamp"], x["source"]))
 
-    # Deduplicate, keeping first occurrence
+    # Phase 1: URL / item_id exact dedup
     seen: set[str] = set()
     deduped: list[dict] = []
     for item in items:
@@ -220,6 +224,24 @@ def collect_items_for_fixture(fixture_id: str, source: str) -> list[dict]:
         if key not in seen:
             seen.add(key)
             deduped.append(item)
+
+    before_semantic = len(deduped)
+
+    # Phase 2: embedding semantic dedup (search items only — eigenflux already
+    # has server-side dedup via group_id)
+    if semantic_dedup and source in ("searches", "both"):
+        from dedup_embeddings import semantic_dedup as _sem_dedup
+        search_items = [it for it in deduped if it["source"] == "search"]
+        other_items = [it for it in deduped if it["source"] != "search"]
+        if search_items:
+            search_items = _sem_dedup(search_items, content_key="content", verbose=True)
+        deduped = sorted(search_items + other_items,
+                         key=lambda x: (x["pull_timestamp"], x["source"]))
+        after_semantic = len(deduped)
+        if before_semantic != after_semantic:
+            print(f"    semantic dedup: {before_semantic} -> {after_semantic} "
+                  f"(-{before_semantic - after_semantic})")
+
     return deduped
 
 
@@ -675,6 +697,14 @@ def main():
                         help="Build prompts and write log lines, but skip the Claude call")
     parser.add_argument("--workers", type=int, default=4,
                         help="Max parallel sessions (default: 4)")
+    parser.add_argument("--no-semantic-dedup", action="store_true",
+                        help="Disable embedding-based semantic dedup (URL dedup only)")
+    parser.add_argument("--daily-target", type=float, default=15,
+                        help="Baseline: min useful sends per day (default: 15)")
+    parser.add_argument("--send-rate-target", type=float, default=0.70,
+                        help="Baseline: min send rate (default: 0.70)")
+    parser.add_argument("--action-rate-target", type=float, default=0.15,
+                        help="Baseline: min action rate (default: 0.15)")
     args = parser.parse_args()
 
     all_fixtures = load_fixtures()
@@ -705,6 +735,7 @@ def main():
     experiment_dir = EXPERIMENTS_DIR / experiment_id
     experiment_dir.mkdir(parents=True, exist_ok=True)
 
+    semantic_dedup = not args.no_semantic_dedup
     config = {
         "experiment_id": experiment_id,
         "model": args.model,
@@ -712,10 +743,16 @@ def main():
         "workers": args.workers,
         "sample": args.sample,
         "seed": args.seed,
+        "semantic_dedup": semantic_dedup,
         "limit": args.limit,
         "start": args.start,
         "end": args.end,
         "dry_run": args.dry_run,
+        "targets": {
+            "daily_sends": args.daily_target,
+            "send_rate": args.send_rate_target,
+            "action_rate": args.action_rate_target,
+        },
         "fixtures": [f["fixture_id"] for f in fixtures],
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -728,8 +765,9 @@ def main():
     print(f"Output dir: {_rel_path(experiment_dir)}")
     print(f"Fixtures: {len(fixtures)}")
     sample_label = f"Sample: {args.sample}/group (seed={args.seed})" if args.sample else "Sample: all"
+    dedup_label = "semantic" if semantic_dedup else "URL-only"
     print(f"Source: {args.source} | Model: {args.model} | Workers: {args.workers}"
-          f" | {sample_label}{' | DRY-RUN' if args.dry_run else ''}")
+          f" | {sample_label} | Dedup: {dedup_label}{' | DRY-RUN' if args.dry_run else ''}")
     if args.start or args.end:
         print(f"Time range: {args.start or '(open)'} -> {args.end or '(open)'}")
     if args.limit is not None:
@@ -748,7 +786,8 @@ def main():
     for fixture in fixtures:
         fid = fixture["fixture_id"]
         for collect_source, run_label in source_runs:
-            items = collect_items_for_fixture(fid, collect_source)
+            items = collect_items_for_fixture(fid, collect_source,
+                                                semantic_dedup=semantic_dedup)
             if args.start or args.end:
                 items = filter_items_by_time(items, args.start, args.end)
             if not items:
@@ -793,6 +832,27 @@ def main():
         summary["send_rate_ci95"] = [round(send_ci_low, 4), round(send_ci_high, 4)]
         summary["action_rate"] = round(action_rate, 4)
         summary["action_rate_ci95"] = [round(action_ci_low, 4), round(action_ci_high, 4)]
+
+        # Quality score: skip=0, send=1, action=3. Per-item average. Target=1.0
+        quality_total = (send_count - action_count) * 1 + action_count * 3
+        summary["quality_total"] = quality_total
+        summary["quality_per_item"] = round(quality_total / n, 4) if n else 0
+
+        # Daily yield = population / days (items per day reaching the agent)
+        days = 1.0
+        if args.start and args.end:
+            try:
+                d0 = _parse_timestamp(args.start)
+                d1 = _parse_timestamp(args.end)
+                days = max((d1 - d0).total_seconds() / 86400, 0.01)
+            except Exception:
+                pass
+        summary["daily_yield"] = round(population / days, 1)
+        summary["targets"] = {
+            "daily_sends": args.daily_target,
+            "send_rate": args.send_rate_target,
+            "action_rate": args.action_rate_target,
+        }
 
         summary_path = fixture_dir / f"{run_label}.summary.json"
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False))
