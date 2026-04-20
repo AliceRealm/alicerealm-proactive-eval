@@ -15,7 +15,9 @@ Usage:
     python3 collect_eigenflux.py --profile               # Push profiles to EigenFlux
 """
 
+import csv
 import json
+import os
 import sys
 import time
 import argparse
@@ -27,7 +29,6 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 DATA_DIR = SCRIPT_DIR / "data" / "eigenflux"
-CREDENTIALS_DIR = SCRIPT_DIR / "eigenflux" / "credentials"
 
 API_BASE = "https://www.eigenflux.ai/api/v1"
 SKILL_VERSION = "0.0.7"
@@ -50,33 +51,80 @@ def load_fixtures() -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Credentials (per fixture)
+# Credentials — read from CSV (one file for all bots)
 # ---------------------------------------------------------------------------
 
-def credentials_path(fixture_id: str) -> Path:
-    return CREDENTIALS_DIR / f"{fixture_id}.json"
+def _load_env():
+    """Load .env from project root (no dependency on python-dotenv)."""
+    env_path = SCRIPT_DIR / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+def _csv_path() -> Path:
+    """Resolve the bot-token CSV path from env."""
+    rel = os.environ.get("EIGENFLUX_BOT_TOKEN_CSV", "eigenflux_bot_token.csv")
+    p = Path(rel)
+    if not p.is_absolute():
+        p = SCRIPT_DIR / p
+    return p
+
+
+def _load_token_map() -> dict[str, str]:
+    """Return {fixture_id: access_token} from the CSV."""
+    path = _csv_path()
+    if not path.exists():
+        print(f"WARNING: bot token CSV not found: {path}")
+        return {}
+    mapping: dict[str, str] = {}
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            used_by = row.get("used_by", "").strip()
+            token = row.get("token", "").strip()
+            if used_by and token:
+                mapping[used_by] = token
+    return mapping
+
+
+# Module-level cache, populated on first use.
+_TOKEN_MAP: dict[str, str] | None = None
 
 
 def load_token(fixture_id: str) -> str | None:
-    """Load access token for a fixture. Returns None if not found."""
-    path = credentials_path(fixture_id)
-    if not path.exists():
-        return None
-    with open(path) as f:
-        data = json.load(f)
-    token = data.get("access_token", "")
-    if not token or token.startswith("<"):
-        return None
-    return token
+    """Load access token for a fixture from the CSV."""
+    global _TOKEN_MAP
+    if _TOKEN_MAP is None:
+        _TOKEN_MAP = _load_token_map()
+    return _TOKEN_MAP.get(fixture_id)
 
 
-def save_credentials(fixture_id: str, creds: dict):
-    """Save credentials for a fixture."""
-    CREDENTIALS_DIR.mkdir(parents=True, exist_ok=True)
-    path = credentials_path(fixture_id)
-    with open(path, "w") as f:
-        json.dump(creds, f, indent=2)
-    print(f"  Saved -> {path}")
+def _upsert_csv_row(email: str, token: str, used_by: str):
+    """Insert or update a row in the bot-token CSV."""
+    path = _csv_path()
+    rows: list[dict] = []
+    if path.exists():
+        with open(path, newline="") as f:
+            rows = list(csv.DictReader(f))
+    updated = False
+    for row in rows:
+        if row.get("used_by", "").strip() == used_by:
+            row["email"] = email
+            row["token"] = token
+            updated = True
+            break
+    if not updated:
+        rows.append({"email": email, "token": token, "used_by": used_by})
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["email", "token", "used_by"])
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"  Saved token to {path}")
 
 
 # ---------------------------------------------------------------------------
@@ -152,14 +200,11 @@ def do_setup(fixtures: list[dict]):
             print(f"  Login failed: {resp}\n")
             continue
 
-        creds = {
-            "agent_id": data["agent_id"],
-            "access_token": data["access_token"],
-            "expires_at": data.get("expires_at"),
-            "email": email,
-        }
-        save_credentials(fid, creds)
-        print(f"  Agent ID: {creds['agent_id']}")
+        _upsert_csv_row(email, data["access_token"], fid)
+        # Invalidate cache so subsequent load_token calls see the new token.
+        global _TOKEN_MAP
+        _TOKEN_MAP = None
+        print(f"  Agent ID: {data.get('agent_id')}")
 
         # Set profile
         if profile:
@@ -306,6 +351,7 @@ def run_one_cycle(fixtures: list[dict], dry_run: bool = False):
 # ---------------------------------------------------------------------------
 
 def main():
+    _load_env()
     parser = argparse.ArgumentParser(description="EigenFlux feed collector (per-fixture)")
     parser.add_argument("--setup", action="store_true",
                         help="Interactive login and profile setup")
