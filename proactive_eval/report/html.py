@@ -37,14 +37,14 @@ def generate_report(scored_trajectories: list[ScoredTrajectory],
         summary["model"] = traj.model
         summary["started_at"] = traj.started_at.isoformat() if traj.started_at else None
         summary["finished_at"] = traj.finished_at.isoformat() if traj.finished_at else None
-        summary["log_path"] = f"{traj.fixture_id}/{traj.run_label}.jsonl"
+        summary["log_path"] = f"{traj.fixture_id}/results.jsonl"
         summary["dry_run"] = traj.config.get("dry_run", False)
 
-        summary_path = fixture_dir / f"{traj.run_label}.summary.json"
+        summary_path = fixture_dir / "results.summary.json"
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False))
 
         # Write JSONL (decision log entries from raw_output)
-        jsonl_path = fixture_dir / f"{traj.run_label}.jsonl"
+        jsonl_path = fixture_dir / "results.jsonl"
         with jsonl_path.open("w") as f:
             for tick in traj.ticks:
                 if tick.raw_output:

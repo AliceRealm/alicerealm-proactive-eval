@@ -219,7 +219,11 @@ def validate_decision(decision: dict) -> tuple[bool, str]:
         return False, f"action={action} requires non-empty 'message'"
     if action == "send_with_action":
         ra = decision.get("recommended_action") or {}
-        if not ra.get("title") or not ra.get("details"):
+        if isinstance(ra, str):
+            # LLM returned a plain string instead of structured dict — accept it
+            if not ra.strip():
+                return False, "send_with_action requires non-empty recommended_action"
+        elif not ra.get("title") or not ra.get("details"):
             return False, "send_with_action requires recommended_action with title and details"
     return True, ""
 
@@ -271,7 +275,12 @@ class PerItemHarness(SimulationHarness):
 
     def process_tick(self, tick_index: int, signals: list[SignalItem],
                      time_window: tuple[datetime, datetime]) -> Tick:
-        """Process all signals in this tick. Each signal is an independent Claude call."""
+        """Process all signals in this tick.
+
+        Uses batch-parallel execution: items within a batch run concurrently
+        (same context snapshot), then context is updated before the next batch.
+        Batch size = self.workers.
+        """
         tick = Tick(
             tick_index=tick_index,
             time_window=time_window,
@@ -281,31 +290,68 @@ class PerItemHarness(SimulationHarness):
         if not signals:
             return tick
 
-        # Convert SignalItems to dicts for prompt building
         item_dicts = [_signal_to_dict(s) for s in signals]
         raw_outputs = []
 
-        # Process items — sequential within tick to maintain rolling context
-        for item_dict in item_dicts:
-            entry = self._decide_one(item_dict)
-            raw_outputs.append(json.dumps(entry, ensure_ascii=False))
+        # Process in batches of `workers` for concurrent API calls
+        for batch_start in range(0, len(item_dicts), max(self.workers, 1)):
+            batch = item_dicts[batch_start:batch_start + self.workers]
 
-            # Update rolling context
-            decision = entry.get("decision", {})
-            self.rolling_ctx.add(item_dict, decision)
+            if self.workers > 1 and len(batch) > 1 and not self.dry_run:
+                # Parallel: snapshot context, run batch concurrently
+                entries = self._decide_batch_parallel(batch)
+            else:
+                # Sequential fallback
+                entries = [self._decide_one(item) for item in batch]
 
-            # Update tallies
-            self._total_processed += 1
-            action = decision.get("action", "skip")
-            if action in self._decisions_tally:
-                self._decisions_tally[action] += 1
-            if not (entry.get("validation") or {}).get("ok", True):
-                self._validation_errors += 1
-            if (entry.get("api") or {}).get("error"):
-                self._api_errors += 1
+            for entry in entries:
+                raw_outputs.append(json.dumps(entry, ensure_ascii=False))
+
+                decision = entry.get("decision", {})
+                self.rolling_ctx.add(
+                    # recover the item dict from entry metadata
+                    {"content": entry.get("content_preview", ""),
+                     "source": entry.get("source", ""),
+                     "received_at": entry.get("pull_timestamp", ""),
+                     "metadata": entry.get("source_metadata", {}),
+                     "raw_item": entry.get("raw_item", {})},
+                    decision,
+                )
+
+                self._total_processed += 1
+                action = decision.get("action", "skip")
+                if action in self._decisions_tally:
+                    self._decisions_tally[action] += 1
+                if not (entry.get("validation") or {}).get("ok", True):
+                    self._validation_errors += 1
+                if (entry.get("api") or {}).get("error"):
+                    self._api_errors += 1
 
         tick.raw_output = "\n".join(raw_outputs)
         return tick
+
+    def _decide_batch_parallel(self, batch: list[dict]) -> list[dict]:
+        """Run a batch of items concurrently using ThreadPoolExecutor."""
+        results: list[tuple[int, dict]] = []
+        with ThreadPoolExecutor(max_workers=self.workers) as pool:
+            futures = {pool.submit(self._decide_one, item): i
+                       for i, item in enumerate(batch)}
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    results.append((idx, future.result()))
+                except Exception as exc:
+                    results.append((idx, {
+                        "decision_id": str(uuid.uuid4()),
+                        "fixture_id": self.fixture_id,
+                        "decision": {"action": "skip",
+                                     "rationale": f"ThreadPool error: {exc}"},
+                        "validation": {"ok": False, "error": str(exc)},
+                        "api": {"error": str(exc)},
+                    }))
+        # Return in original order
+        results.sort(key=lambda x: x[0])
+        return [r[1] for r in results]
 
     def _decide_one(self, item: dict) -> dict:
         """Evaluate a single item. Returns a log entry dict."""

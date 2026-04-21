@@ -52,13 +52,22 @@ def filter_by_time(items: list[SignalItem],
     return [
         it for it in items
         if (not start_dt or it.received_at >= start_dt)
-        and (not end_dt or it.received_at < end_dt)
+        and (not end_dt or it.received_at <= end_dt)
     ]
 
 
+AUTO_SAMPLE_THRESHOLD = 500  # per-fixture: auto-sample when items exceed this
+AUTO_SAMPLE_SIZE = 400       # target sample size when auto-sampling
+
+
 def sample_items(items: list[SignalItem], sample_size: int | None,
-                 seed: int = 42) -> tuple[list[SignalItem], int]:
+                 seed: int = 42, auto: bool = True) -> tuple[list[SignalItem], int]:
     population = len(items)
+    # Auto-sample: if no explicit sample_size and population exceeds threshold
+    if sample_size is None and auto and population > AUTO_SAMPLE_THRESHOLD:
+        sample_size = AUTO_SAMPLE_SIZE
+        print(f"    [auto-sample] {population} items > {AUTO_SAMPLE_THRESHOLD} threshold, "
+              f"sampling {sample_size}")
     if sample_size is None or sample_size >= population:
         return items, population
     rng = random.Random(seed)
@@ -104,7 +113,7 @@ def cmd_collect(args):
     source = get_source(args.source)
 
     # Auto-sync profiles for eigenflux
-    if args.source == "eigenflux" and not args.dry_run:
+    if args.source == "eigenflux" and not args.dry_run and not args.skip_profile_sync:
         print("=== Syncing profiles ===")
         sync_profiles(fixtures)
         print()
@@ -222,26 +231,49 @@ def cmd_simulate(args):
         json.dumps(config, indent=2, ensure_ascii=False)
     )
 
-    # Determine source runs
-    if args.source == "both":
-        source_runs = [("searches", "search_only"), ("eigenflux", "eigenflux_only")]
-    else:
-        source_runs = [(args.source, args.source)]
+    # Each experiment runs a single source
+    run_label = "results"
 
-    print(f"=== Decision Simulation ===")
-    print(f"Experiment: {experiment_id}")
-    print(f"Fixtures: {len(fixtures)} | Source: {args.source} | Model: {args.model}")
-    if args.dry_run:
-        print("  DRY-RUN mode")
-    print()
-
-    # Load signals and run
+    # Load signals
     from proactive_eval.sources.eigenflux import EigenFluxSource
     from proactive_eval.sources.search import SearchSource
 
-    eigenflux_src = EigenFluxSource()
-    search_src = SearchSource()
-    all_scored = []
+    if args.source == "eigenflux":
+        src = EigenFluxSource()
+    elif args.source == "searches":
+        src = SearchSource()
+    else:
+        print(f"Error: unknown source '{args.source}'")
+        sys.exit(1)
+
+    # --- Pre-load all signals to auto-detect time range ---
+    all_signals_by_fixture: dict[str, list] = {}
+    for fixture in fixtures:
+        fid = fixture["fixture_id"]
+        signals = src.replay(fid)
+        signals.sort(key=lambda s: s.received_at)
+        signals = dedup_signal_items(signals, semantic=semantic_dedup, verbose=False)
+        all_signals_by_fixture[fid] = signals
+
+    # Auto-detect time range from data if not specified
+    if not args.start or not args.end:
+        all_timestamps = []
+        for signals in all_signals_by_fixture.values():
+            for s in signals:
+                if s.received_at:
+                    all_timestamps.append(s.received_at)
+        if all_timestamps:
+            data_start = min(all_timestamps)
+            data_end = max(all_timestamps)
+            if not args.start:
+                args.start = data_start.isoformat()
+            if not args.end:
+                args.end = data_end.isoformat()
+            print(f"  Data time range: {args.start[:19]} → {args.end[:19]}")
+
+    # Update config with resolved time range
+    config["start"] = args.start
+    config["end"] = args.end
 
     # Compute days for daily_yield
     days = 1.0
@@ -252,75 +284,77 @@ def cmd_simulate(args):
             days = max((d1 - d0).total_seconds() / 86400, 0.01)
         except Exception:
             pass
+    config["data_days"] = round(days, 4)
+
+    # Save updated config
+    (experiment_dir / "config.json").write_text(
+        json.dumps(config, indent=2, ensure_ascii=False)
+    )
+
+    print(f"=== Decision Simulation ===")
+    print(f"Experiment: {experiment_id}")
+    print(f"Fixtures: {len(fixtures)} | Source: {args.source} | Model: {args.model}")
+    print(f"Time window: {args.start or '?'} → {args.end or '?'} ({days:.2f} days)")
+    if args.dry_run:
+        print("  DRY-RUN mode")
+    print()
+
+    all_scored = []
 
     for fixture in fixtures:
         fid = fixture["fixture_id"]
-        for collect_source, run_label in source_runs:
-            # Load signals from disk (replay)
-            if collect_source in ("eigenflux", "both"):
-                signals = eigenflux_src.replay(fid)
-            else:
-                signals = []
-            if collect_source in ("searches", "both"):
-                signals.extend(search_src.replay(fid))
+        signals = all_signals_by_fixture.get(fid, [])
 
-            signals.sort(key=lambda s: s.received_at)
+        # Time filter
+        if args.start or args.end:
+            signals = filter_by_time(signals, args.start, args.end)
 
-            # Dedup
-            signals = dedup_signal_items(signals, semantic=semantic_dedup, verbose=True)
+        if not signals:
+            print(f"--- {fid}: 0 items (skipping)")
+            continue
 
-            # Time filter
-            if args.start or args.end:
-                signals = filter_by_time(signals, args.start, args.end)
+        # Sample (auto-samples when > threshold)
+        signals, population = sample_items(signals, args.sample, seed=args.seed)
+        if args.limit and len(signals) > args.limit:
+            signals = signals[:args.limit]
+        print(f"--- {fid}: {len(signals)}/{population} items")
 
-            if not signals:
-                print(f"--- {fid} [{run_label}]: 0 items (skipping)")
-                continue
+        # Create harness and run simulation
+        harness = PerItemHarness(
+            client=client,
+            model=args.model,
+            max_tokens=args.max_tokens,
+            temperature=args.temperature,
+            window_size=getattr(args, "window", 30),
+            dry_run=args.dry_run,
+            workers=args.workers,
+        )
 
-            # Sample
-            signals, population = sample_items(signals, args.sample, seed=args.seed)
-            if args.limit and len(signals) > args.limit:
-                signals = signals[:args.limit]
-            print(f"--- {fid} [{run_label}]: {len(signals)}/{population} items")
+        trajectory = run_simulation(
+            harness=harness,
+            fixture=fixture,
+            signals=signals,
+            tick_duration_minutes=99999,
+            config=config,
+        )
+        trajectory.run_label = run_label
 
-            # Create harness and run simulation
-            harness = PerItemHarness(
-                client=client,
-                model=args.model,
-                max_tokens=args.max_tokens,
-                temperature=args.temperature,
-                window_size=getattr(args, "window", 30),
-                dry_run=args.dry_run,
-                workers=args.workers,
-            )
+        # Score
+        extractor = DecisionExtractor()
+        scorer = QualityScorer(
+            targets=config["targets"],
+            days=days,
+        )
+        scored = score_trajectory(trajectory, extractor, scorer)
+        scored.stats["population_size"] = population
+        scored.stats["sample_size"] = len(signals)
+        all_scored.append(scored)
 
-            # Use a large tick window to put all items in one tick for per-item harness
-            trajectory = run_simulation(
-                harness=harness,
-                fixture=fixture,
-                signals=signals,
-                tick_duration_minutes=99999,  # all items in one tick for per-item mode
-                config=config,
-            )
-            trajectory.run_label = run_label
-
-            # Score
-            extractor = DecisionExtractor()
-            scorer = QualityScorer(
-                targets=config["targets"],
-                days=days,
-            )
-            scored = score_trajectory(trajectory, extractor, scorer)
-            scored.stats["population_size"] = population
-            scored.stats["sample_size"] = len(signals)
-            all_scored.append(scored)
-
-            # Print summary
-            stats = scored.stats
-            sr = stats.get("send_rate", 0)
-            ar = stats.get("action_rate", 0)
-            print(f"  DONE {fid} [{run_label}]: {stats.get('decisions', {})} | "
-                  f"send={sr:.0%} action={ar:.0%}")
+        stats = scored.stats
+        sr = stats.get("send_rate", 0)
+        ar = stats.get("action_rate", 0)
+        print(f"  DONE {fid}: {stats.get('decisions', {})} | "
+              f"send={sr:.0%} action={ar:.0%}")
 
     # Generate report
     if all_scored:
@@ -333,6 +367,42 @@ def cmd_simulate(args):
     )
 
     print(f"\n=== Done. Experiment: {experiment_id} ===")
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: compare
+# ---------------------------------------------------------------------------
+
+def cmd_compare(args):
+    """Compare 2+ experiments side-by-side."""
+    import sys
+    sys.path.insert(0, str(SCRIPT_DIR))
+    from visualize_results import load_experiment, generate_compare_html, EXPERIMENTS_DIR
+
+    experiments = []
+    for eid in args.experiments:
+        exp_dir = EXPERIMENTS_DIR / eid
+        if not exp_dir.exists():
+            print(f"Error: experiment not found: {eid}")
+            sys.exit(1)
+        exp = load_experiment(exp_dir, include_decisions=True)
+        if not exp:
+            print(f"Error: failed to load experiment: {eid}")
+            sys.exit(1)
+        experiments.append(exp)
+
+    html = generate_compare_html(experiments)
+
+    # Write to a compare file
+    ids_str = "_vs_".join(args.experiments[:3])
+    out_path = EXPERIMENTS_DIR / f"compare_{ids_str}" / "index.html"
+    out_path.parent.mkdir(exist_ok=True)
+    out_path.write_text(html)
+    print(f"Compare page: {out_path}")
+
+    if not args.no_serve:
+        from visualize_results import serve
+        serve(args.port, f"/compare_{ids_str}/index.html")
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +501,7 @@ def _select_fixtures(all_fixtures: list[dict], fixture_idx: int | None,
 def _make_simulate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", type=int, default=None)
-    parser.add_argument("--source", choices=["eigenflux", "searches", "both"], default="both")
+    parser.add_argument("--source", choices=["eigenflux", "searches"], default="eigenflux")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--sample", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -472,11 +542,13 @@ def main():
     p_collect.add_argument("--interval", type=int, default=5)
     p_collect.add_argument("--duration", type=float, default=0)
     p_collect.add_argument("--dry-run", action="store_true")
+    p_collect.add_argument("--skip-profile-sync", action="store_true",
+                           help="Do not push fixture profiles at startup")
 
     # --- simulate ---
     p_sim = subparsers.add_parser("simulate", help="Run simulation on collected signals")
     p_sim.add_argument("--fixture", type=int, default=None)
-    p_sim.add_argument("--source", choices=["eigenflux", "searches", "both"], default="both")
+    p_sim.add_argument("--source", choices=["eigenflux", "searches"], default="eigenflux")
     p_sim.add_argument("--model", default=DEFAULT_MODEL)
     p_sim.add_argument("--sample", type=int, default=None)
     p_sim.add_argument("--seed", type=int, default=42)
@@ -501,6 +573,13 @@ def main():
     p_report.add_argument("--port", type=int, default=8420)
     p_report.add_argument("--no-serve", action="store_true")
 
+    # --- compare ---
+    p_compare = subparsers.add_parser("compare", help="Compare 2+ experiments")
+    p_compare.add_argument("experiments", nargs="+", metavar="EXPERIMENT_ID",
+                           help="Experiment IDs to compare")
+    p_compare.add_argument("--port", type=int, default=8420)
+    p_compare.add_argument("--no-serve", action="store_true")
+
     # --- setup ---
     p_setup = subparsers.add_parser("setup", help="Interactive source setup")
     p_setup.add_argument("--source", required=True, choices=["eigenflux"])
@@ -516,6 +595,8 @@ def main():
         cmd_collect(args)
     elif args.command == "simulate":
         cmd_simulate(args)
+    elif args.command == "compare":
+        cmd_compare(args)
     elif args.command == "report":
         cmd_report(args)
     elif args.command == "setup":

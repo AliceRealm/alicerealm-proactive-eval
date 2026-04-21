@@ -788,8 +788,8 @@ def main():
     parser = argparse.ArgumentParser(description="Per-item decision simulation for proactive-eval")
     parser.add_argument("--fixture", type=int, default=None,
                         help="Only operate on the Nth fixture (1-indexed)")
-    parser.add_argument("--source", choices=["eigenflux", "searches", "both"], default="both",
-                        help="Which collected source to feed to the model (default: both)")
+    parser.add_argument("--source", choices=["eigenflux", "searches"], default="eigenflux",
+                        help="Which collected source to feed to the model (default: eigenflux)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
                         help=f"Anthropic model to call (default: {DEFAULT_MODEL})")
     parser.add_argument("--sample", type=int, default=None,
@@ -927,12 +927,8 @@ def main():
         print(f"Limit: {args.limit} items per fixture")
     print()
 
-    # When --source both, run two independent sessions per fixture so we can
-    # compare eigenflux vs search side by side.  Otherwise run once.
-    if args.source == "both":
-        source_runs = [("searches", "search_only"), ("eigenflux", "eigenflux_only")]
-    else:
-        source_runs = [(args.source, args.source)]
+    # Each experiment runs a single source
+    source_runs = [(args.source, "results")]
 
     # Build the list of jobs: (fixture, run_label, items, population_size)
     jobs = []

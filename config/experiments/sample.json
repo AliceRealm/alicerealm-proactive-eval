@@ -1,31 +1,25 @@
 {
-  "name": "EigenFlux v2 keyword extraction",
-  "description": "Test new keyword extraction against agent-driven search",
+  "name": "EigenFlux evaluation",
+  "description": "Evaluate EigenFlux proactive feed quality. Run separately for each source; compare post-hoc.",
   "model": "claude-haiku-4-5-20251001",
   "max_tokens": 1024,
   "temperature": 0.0,
   "source": "eigenflux",
   "time_range": {
-    "start": "2026-04-15T11:15+00:00",
+    "start": null,
     "end": null
   },
   "sampling": {
-    "size": 100,
+    "size": null,
     "seed": 42
   },
   "dedup": "semantic",
   "fixtures": "all",
-  "pre_steps": ["clear_impressions"],
+  "pre_steps": [],
   "targets": {
     "daily_sends": 15,
     "send_rate": 0.70,
     "action_rate": 0.15
   },
-  "workers": 4,
-  "search": {
-    "provider": "duckduckgo",
-    "max_results_per_query": 5,
-    "sleep_between_queries": 5,
-    "queries_file": "search_queries.json"
-  }
+  "workers": 8
 }

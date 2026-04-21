@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 import json
+import os
 import time
 import urllib.request
 import urllib.error
@@ -14,7 +16,6 @@ from proactive_eval.sources import SignalSource
 from proactive_eval.config import SCRIPT_DIR, rel_path
 
 DATA_DIR = SCRIPT_DIR / "data" / "eigenflux"
-CREDENTIALS_DIR = SCRIPT_DIR / "eigenflux" / "credentials"
 
 API_BASE = "https://www.eigenflux.ai/api/v1"
 SKILL_VERSION = "0.0.7"
@@ -42,6 +43,9 @@ class EigenFluxSource(SignalSource):
         result = collect_one_fixture(fixture_id, token, dry_run=dry_run)
         if not dry_run:
             save_result(fixture_id, result)
+        if result.get("feed", {}).get("code") == 401:
+            print(f"    WARNING: {fixture_id} got 401. "
+                  f"Re-run `python -m proactive_eval setup --source eigenflux` to refresh.")
         return _normalize_result(result, fixture_id)
 
     # ------------------------------------------------------------------
@@ -98,14 +102,8 @@ class EigenFluxSource(SignalSource):
             print(f"  Login failed: {resp}")
             return
 
-        creds = {
-            "agent_id": data["agent_id"],
-            "access_token": data["access_token"],
-            "expires_at": data.get("expires_at"),
-            "email": email,
-        }
-        save_credentials(fid, creds)
-        print(f"  Agent ID: {creds['agent_id']}")
+        save_token(fid, email, data["access_token"])
+        print(f"  Agent ID: {data['agent_id']}")
 
         if profile:
             push_profile(data["access_token"], profile)
@@ -138,31 +136,70 @@ def api_request(method: str, endpoint: str, token: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# Credentials
+# Credentials — CSV-based token store
 # ---------------------------------------------------------------------------
 
-def credentials_path(fixture_id: str) -> Path:
-    return CREDENTIALS_DIR / f"{fixture_id}.json"
+def _csv_path() -> Path:
+    """Resolve the bot-token CSV path from env or default."""
+    rel = os.environ.get("EIGENFLUX_BOT_TOKEN_CSV", "eigenflux_bot_token.csv")
+    p = Path(rel)
+    if not p.is_absolute():
+        p = SCRIPT_DIR / p
+    return p
+
+
+# Module-level cache, populated on first use.
+_TOKEN_MAP: dict[str, str] | None = None
+
+
+def _load_token_map() -> dict[str, str]:
+    """Return {fixture_id: access_token} from the CSV."""
+    path = _csv_path()
+    if not path.exists():
+        print(f"WARNING: bot token CSV not found: {path}")
+        return {}
+    mapping: dict[str, str] = {}
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            used_by = row.get("used_by", "").strip()
+            token = row.get("token", "").strip()
+            if used_by and token:
+                mapping[used_by] = token
+    return mapping
 
 
 def load_token(fixture_id: str) -> str | None:
-    path = credentials_path(fixture_id)
-    if not path.exists():
-        return None
-    with open(path) as f:
-        data = json.load(f)
-    token = data.get("access_token", "")
-    if not token or token.startswith("<"):
-        return None
-    return token
+    """Load access token for a fixture from the CSV."""
+    global _TOKEN_MAP
+    if _TOKEN_MAP is None:
+        _TOKEN_MAP = _load_token_map()
+    return _TOKEN_MAP.get(fixture_id)
 
 
-def save_credentials(fixture_id: str, creds: dict):
-    CREDENTIALS_DIR.mkdir(parents=True, exist_ok=True)
-    path = credentials_path(fixture_id)
-    with open(path, "w") as f:
-        json.dump(creds, f, indent=2)
-    print(f"  Saved -> {path}")
+def save_token(fixture_id: str, email: str, token: str):
+    """Insert or update a row in the bot-token CSV."""
+    global _TOKEN_MAP
+    path = _csv_path()
+    rows: list[dict] = []
+    if path.exists():
+        with open(path, newline="") as f:
+            rows = list(csv.DictReader(f))
+    updated = False
+    for row in rows:
+        if row.get("used_by", "").strip() == fixture_id:
+            row["email"] = email
+            row["token"] = token
+            updated = True
+            break
+    if not updated:
+        rows.append({"email": email, "token": token, "used_by": fixture_id})
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["email", "token", "used_by"])
+        writer.writeheader()
+        writer.writerows(rows)
+    # Invalidate cache so subsequent load_token calls see the new token.
+    _TOKEN_MAP = None
+    print(f"  Saved token to {path}")
 
 
 # ---------------------------------------------------------------------------
