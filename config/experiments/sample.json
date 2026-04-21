@@ -1,0 +1,25 @@
+{
+  "name": "EigenFlux evaluation",
+  "description": "Evaluate EigenFlux proactive feed quality. Run separately for each source; compare post-hoc.",
+  "model": "claude-haiku-4-5-20251001",
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "source": "eigenflux",
+  "time_range": {
+    "start": null,
+    "end": null
+  },
+  "sampling": {
+    "size": null,
+    "seed": 42
+  },
+  "dedup": "semantic",
+  "fixtures": "all",
+  "pre_steps": [],
+  "targets": {
+    "daily_sends": 15,
+    "send_rate": 0.70,
+    "action_rate": 0.15
+  },
+  "workers": 8
+}

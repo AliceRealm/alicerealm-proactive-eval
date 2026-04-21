@@ -12,4 +12,14 @@ eigenflux/credentials/*.json
 
 # Misc local secret dumps — never commit.
 aliap_login_email_token.csv
+eigenflux_bot_token.csv
 *_login_*token*.csv
+
+# Scratch / temp working dirs
+vic_temp/
+
+# IDE / tool configs
+.claude/
+
+# Dead legacy files
+conditions/

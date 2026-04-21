@@ -472,8 +472,9 @@ def validate_decision(decision: dict) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 
 def call_decide(client, model: str, system_prompt: str, user_message: str,
-                max_tokens: int = DEFAULT_MAX_TOKENS):
-    return client.messages.create(
+                max_tokens: int = DEFAULT_MAX_TOKENS,
+                temperature: float | None = None):
+    kwargs: dict = dict(
         model=model,
         max_tokens=max_tokens,
         system=system_prompt,
@@ -481,6 +482,9 @@ def call_decide(client, model: str, system_prompt: str, user_message: str,
         tool_choice={"type": "any"},
         messages=[{"role": "user", "content": user_message}],
     )
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return client.messages.create(**kwargs)
 
 
 def usage_dict(resp) -> dict:
@@ -498,7 +502,9 @@ def usage_dict(resp) -> dict:
 # ---------------------------------------------------------------------------
 
 def _decide_one(client, model: str, system_prompt: str, item: dict,
-                fid: str, dry_run: bool) -> dict:
+                fid: str, dry_run: bool,
+                max_tokens: int = DEFAULT_MAX_TOKENS,
+                temperature: float | None = None) -> dict:
     """Evaluate a single item independently. Returns a log entry dict."""
     user_msg = build_user_message(item)
 
@@ -537,7 +543,8 @@ def _decide_one(client, model: str, system_prompt: str, item: dict,
     api_error = None
     decision = None
     try:
-        resp = call_decide(client, model, system_prompt, user_msg)
+        resp = call_decide(client, model, system_prompt, user_msg,
+                           max_tokens=max_tokens, temperature=temperature)
         decision = parse_decision(resp)
         usage = usage_dict(resp)
     except Exception as exc:
@@ -563,7 +570,9 @@ def _decide_one(client, model: str, system_prompt: str, item: dict,
 
 def simulate_fixture(client, fixture: dict, items: list[dict], model: str,
                      dry_run: bool, limit: int | None,
-                     log_path: Path, workers: int = 4) -> dict:
+                     log_path: Path, workers: int = 4,
+                     max_tokens: int = DEFAULT_MAX_TOKENS,
+                     temperature: float | None = None) -> dict:
     fid = fixture["fixture_id"]
     system_prompt = build_system_prompt(fixture)
     summary = {
@@ -590,7 +599,8 @@ def simulate_fixture(client, fixture: dict, items: list[dict], model: str,
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         future_to_idx = {
-            pool.submit(_decide_one, client, model, system_prompt, item, fid, dry_run): idx
+            pool.submit(_decide_one, client, model, system_prompt, item, fid, dry_run,
+                        max_tokens, temperature): idx
             for idx, item in enumerate(items)
         }
         # Collect results, preserving original order for the log file.
@@ -669,6 +679,105 @@ def sample_items(items: list[dict], sample_size: int | None, seed: int = 42) -> 
     return sampled_ordered, population
 
 
+def pre_step_clear_impressions(fixtures: list[dict]):
+    """Clear server-side impression records for all fixture agents."""
+    import urllib.request
+    base_url = os.environ.get("EIGENFLUX_CONSOLE_URL", "http://localhost:8090") + "/console/api/v1/impr/items"
+    for fixture in fixtures:
+        agent_id = fixture.get("eigenflux_profile", {}).get("agent_id")
+        if not agent_id:
+            print(f"  [clear_impressions] skip {fixture['fixture_id']} (no agent_id)")
+            continue
+        url = f"{base_url}?agent_id={agent_id}"
+        req = urllib.request.Request(url, method="DELETE")
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                print(f"  [clear_impressions] {fixture['fixture_id']}: {resp.status}")
+        except Exception as e:
+            print(f"  [clear_impressions] {fixture['fixture_id']}: FAILED ({e})")
+
+
+PRE_STEPS = {
+    "clear_impressions": pre_step_clear_impressions,
+}
+
+
+def load_experiment_config(config_path: str) -> dict:
+    """Load and return an experiment config JSON file."""
+    path = Path(config_path)
+    if not path.exists():
+        print(f"Error: config file not found: {config_path}")
+        sys.exit(1)
+    return json.loads(path.read_text())
+
+
+def _arg_was_defaulted(parser: argparse.ArgumentParser,
+                       args: argparse.Namespace, dest: str) -> bool:
+    """Return True if the arg at `dest` still holds its parser default
+    (i.e. the user did not explicitly pass it on the CLI)."""
+    return getattr(args, dest) == parser.get_default(dest)
+
+
+def apply_config_to_args(parser: argparse.ArgumentParser,
+                         args: argparse.Namespace,
+                         cfg: dict) -> list[str]:
+    """Merge experiment config into args namespace.
+
+    Only overrides args that were NOT explicitly set on the CLI.
+    Returns the list of pre_steps to run.
+    """
+    mapping = [
+        # (config_key_path, args_dest, transform)
+        (["model"], "model", None),
+        (["max_tokens"], "max_tokens", None),
+        (["temperature"], "temperature", None),
+        (["source"], "source", None),
+        (["time_range", "start"], "start", None),
+        (["time_range", "end"], "end", None),
+        (["sampling", "size"], "sample", None),
+        (["sampling", "seed"], "seed", None),
+        (["targets", "daily_sends"], "daily_target", None),
+        (["targets", "send_rate"], "send_rate_target", None),
+        (["targets", "action_rate"], "action_rate_target", None),
+        (["workers"], "workers", None),
+    ]
+
+    for key_path, dest, transform in mapping:
+        # Navigate nested config dict
+        val = cfg
+        for k in key_path:
+            if isinstance(val, dict):
+                val = val.get(k)
+            else:
+                val = None
+                break
+        if val is None:
+            continue
+        if _arg_was_defaulted(parser, args, dest):
+            if transform:
+                val = transform(val)
+            setattr(args, dest, val)
+
+    # dedup: config["dedup"] -> args.no_semantic_dedup
+    if "dedup" in cfg and _arg_was_defaulted(parser, args, "no_semantic_dedup"):
+        args.no_semantic_dedup = (cfg["dedup"] != "semantic")
+
+    # fixtures: config["fixtures"] -> args.fixture
+    # Handled separately: "all" means None, list of ints means we store it
+    # as a special attribute for multi-fixture selection.
+    if "fixtures" in cfg and _arg_was_defaulted(parser, args, "fixture"):
+        fix_val = cfg["fixtures"]
+        if isinstance(fix_val, list):
+            # Store as list of 1-indexed fixture indices for main() to handle
+            args._config_fixture_indices = fix_val
+        elif fix_val == "all":
+            args.fixture = None  # already the default, but be explicit
+        elif isinstance(fix_val, int):
+            args.fixture = fix_val
+
+    return cfg.get("pre_steps", [])
+
+
 def make_experiment_id(model: str) -> str:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_model = model.replace("/", "_")
@@ -679,8 +788,8 @@ def main():
     parser = argparse.ArgumentParser(description="Per-item decision simulation for proactive-eval")
     parser.add_argument("--fixture", type=int, default=None,
                         help="Only operate on the Nth fixture (1-indexed)")
-    parser.add_argument("--source", choices=["eigenflux", "searches", "both"], default="both",
-                        help="Which collected source to feed to the model (default: both)")
+    parser.add_argument("--source", choices=["eigenflux", "searches"], default="eigenflux",
+                        help="Which collected source to feed to the model (default: eigenflux)")
     parser.add_argument("--model", default=DEFAULT_MODEL,
                         help=f"Anthropic model to call (default: {DEFAULT_MODEL})")
     parser.add_argument("--sample", type=int, default=None,
@@ -697,6 +806,10 @@ def main():
                         help="Build prompts and write log lines, but skip the Claude call")
     parser.add_argument("--workers", type=int, default=4,
                         help="Max parallel sessions (default: 4)")
+    parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS,
+                        help=f"Max tokens for the model response (default: {DEFAULT_MAX_TOKENS})")
+    parser.add_argument("--temperature", type=float, default=None,
+                        help="Temperature for the model call (default: not set, use API default)")
     parser.add_argument("--no-semantic-dedup", action="store_true",
                         help="Disable embedding-based semantic dedup (URL dedup only)")
     parser.add_argument("--daily-target", type=float, default=15,
@@ -705,17 +818,53 @@ def main():
                         help="Baseline: min send rate (default: 0.70)")
     parser.add_argument("--action-rate-target", type=float, default=0.15,
                         help="Baseline: min action rate (default: 0.15)")
+    parser.add_argument("--config", default=None,
+                        help="Path to experiment config JSON. CLI flags override config values.")
     args = parser.parse_args()
 
+    # --- Load experiment config if provided ---
+    pre_steps: list[str] = []
+    config_file_path = None
+    if args.config:
+        config_file_path = str(Path(args.config).resolve())
+        experiment_cfg = load_experiment_config(args.config)
+        pre_steps = apply_config_to_args(parser, args, experiment_cfg)
+        print(f"Loaded config: {config_file_path}")
+        if experiment_cfg.get("name"):
+            print(f"  Experiment name: {experiment_cfg['name']}")
+
     all_fixtures = load_fixtures()
+
+    # Handle multi-fixture selection from config (list of 1-indexed indices)
+    config_fixture_indices = getattr(args, "_config_fixture_indices", None)
     if args.fixture is not None:
         idx = args.fixture - 1
         if idx < 0 or idx >= len(all_fixtures):
             print(f"Error: --fixture must be 1-{len(all_fixtures)}")
             sys.exit(1)
         fixtures = [all_fixtures[idx]]
+    elif config_fixture_indices is not None:
+        fixtures = []
+        for ci in config_fixture_indices:
+            idx = ci - 1  # config uses 1-indexed
+            if 0 <= idx < len(all_fixtures):
+                fixtures.append(all_fixtures[idx])
+            else:
+                print(f"Warning: fixture index {ci} out of range (1-{len(all_fixtures)}), skipping")
+        if not fixtures:
+            print("Error: no valid fixtures selected from config")
+            sys.exit(1)
     else:
         fixtures = all_fixtures
+
+    # --- Run pre-steps ---
+    for step_name in pre_steps:
+        handler = PRE_STEPS.get(step_name)
+        if handler:
+            print(f"Running pre-step: {step_name}")
+            handler(fixtures)
+        else:
+            print(f"Warning: unknown pre-step '{step_name}', skipping")
 
     # Lazy import so --dry-run works without anthropic installed
     client = None
@@ -738,7 +887,10 @@ def main():
     semantic_dedup = not args.no_semantic_dedup
     config = {
         "experiment_id": experiment_id,
+        "resolved_from": config_file_path,
         "model": args.model,
+        "max_tokens": args.max_tokens,
+        "temperature": args.temperature,
         "source": args.source,
         "workers": args.workers,
         "sample": args.sample,
@@ -748,6 +900,7 @@ def main():
         "start": args.start,
         "end": args.end,
         "dry_run": args.dry_run,
+        "pre_steps": pre_steps,
         "targets": {
             "daily_sends": args.daily_target,
             "send_rate": args.send_rate_target,
@@ -774,12 +927,8 @@ def main():
         print(f"Limit: {args.limit} items per fixture")
     print()
 
-    # When --source both, run two independent sessions per fixture so we can
-    # compare eigenflux vs search side by side.  Otherwise run once.
-    if args.source == "both":
-        source_runs = [("searches", "search_only"), ("eigenflux", "eigenflux_only")]
-    else:
-        source_runs = [(args.source, args.source)]
+    # Each experiment runs a single source
+    source_runs = [(args.source, "results")]
 
     # Build the list of jobs: (fixture, run_label, items, population_size)
     jobs = []
@@ -818,6 +967,8 @@ def main():
             limit=args.limit,
             log_path=log_path,
             workers=args.workers,
+            max_tokens=args.max_tokens,
+            temperature=args.temperature,
         )
 
         # Add sampling stats & confidence intervals
