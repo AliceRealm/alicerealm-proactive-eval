@@ -135,7 +135,12 @@ def cmd_collect(args):
         print(f"[Cycle {cycle}] @ {datetime.now().isoformat()}")
         for fix in fixtures:
             fid = fix["fixture_id"]
-            items = source.collect(fid, dry_run=args.dry_run)
+            collect_kwargs = {"dry_run": args.dry_run}
+            if args.source == "search" and getattr(args, "llm_queries", False):
+                collect_kwargs["llm_queries"] = True
+                collect_kwargs["num_queries"] = args.num_queries
+                collect_kwargs["query_model"] = args.query_model
+            items = source.collect(fid, **collect_kwargs)
             print(f"  {fid}: {len(items)} items")
 
         if total_cycles is not None and cycle >= total_cycles:
@@ -544,6 +549,12 @@ def main():
     p_collect.add_argument("--dry-run", action="store_true")
     p_collect.add_argument("--skip-profile-sync", action="store_true",
                            help="Do not push fixture profiles at startup")
+    p_collect.add_argument("--llm-queries", action="store_true",
+                           help="Generate search queries via LLM instead of static JSON")
+    p_collect.add_argument("--num-queries", type=int, default=5,
+                           help="Number of queries to generate per fixture (default: 5)")
+    p_collect.add_argument("--query-model", default="claude-haiku-4-5-20251001",
+                           help="Model for query generation (default: claude-haiku-4-5-20251001)")
 
     # --- simulate ---
     p_sim = subparsers.add_parser("simulate", help="Run simulation on collected signals")

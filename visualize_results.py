@@ -180,7 +180,8 @@ def _esc(s: str) -> str:
 def _short_ts_range(start: str | None, end: str | None) -> str:
     if not start and not end:
         return "(no time window)"
-    from datetime import datetime
+    from datetime import datetime, timezone, timedelta
+    _CST = timezone(timedelta(hours=8))
     parts = []
     for ts in [start, end]:
         if not ts:
@@ -188,6 +189,9 @@ def _short_ts_range(start: str | None, end: str | None) -> str:
             continue
         try:
             dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.astimezone(_CST)
             parts.append(dt.strftime("%b %d %H:%M"))
         except Exception:
             parts.append(ts[:16])
@@ -583,7 +587,6 @@ def generate_compare_html(experiments: list[dict]) -> str:
         fixtures = exp.get("_fixtures", {})
         total_items = total_sends = total_actions = 0
         send_rates = []
-        total_cost = 0.0
         for fid in all_fixture_ids:
             if fid not in fixtures:
                 continue
@@ -595,14 +598,10 @@ def generate_compare_html(experiments: list[dict]) -> str:
                 total_sends += d.get("send", 0) + d.get("send_with_action", 0)
                 total_actions += d.get("send_with_action", 0)
                 send_rates.append(s.get("send_rate", 0))
-                for dec in rd.get("decisions", []):
-                    api = dec.get("api", {})
-                    total_cost += (api.get("input_tokens", 0) * 0.25 +
-                                   api.get("output_tokens", 0) * 1.25) / 1_000_000
         avg_sr = sum(send_rates) / len(send_rates) if send_rates else 0
         agg.append({
             "items": total_items, "sends": total_sends, "actions": total_actions,
-            "avg_sr": avg_sr, "cost": total_cost,
+            "avg_sr": avg_sr,
         })
 
     # Big number cards
@@ -629,7 +628,6 @@ def generate_compare_html(experiments: list[dict]) -> str:
         f'{_big_num_card("Action Count", [a["actions"] for a in agg])}'
         f'{_big_num_card("Avg Send Rate", [a["avg_sr"] * 100 for a in agg], ".1f", "%")}'
         f'{_big_num_card("Total Items", [a["items"] for a in agg])}'
-        f'{_big_num_card("Est. Cost", [a["cost"] * 100 for a in agg], ".2f", " cents")}'
         f'</div>'
     )
 

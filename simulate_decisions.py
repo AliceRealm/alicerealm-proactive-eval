@@ -230,7 +230,7 @@ def collect_items_for_fixture(fixture_id: str, source: str,
     # Phase 2: embedding semantic dedup (search items only — eigenflux already
     # has server-side dedup via group_id)
     if semantic_dedup and source in ("searches", "both"):
-        from dedup_embeddings import semantic_dedup as _sem_dedup
+        from proactive_eval.dedup import semantic_dedup as _sem_dedup
         search_items = [it for it in deduped if it["source"] == "search"]
         other_items = [it for it in deduped if it["source"] != "search"]
         if search_items:
