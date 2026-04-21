@@ -96,6 +96,8 @@ This represents an assistant with general search but no personalized feed.
 
 Both pipelines run on the same time window (one day per persona × condition) and produce a stream of items for the decision protocol below.
 
+Items from both pipelines pass through content-based deduplication before reaching the decision protocol — exact-hash match plus embedding cosine similarity, to catch the same-story-different-source case. This prevents a single underlying signal from inflating either condition's count by appearing multiple times.
+
 ---
 
 ## Decision protocol
