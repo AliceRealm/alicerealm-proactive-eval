@@ -1,8 +1,11 @@
-# Results
+# Findings
 
 First-pass results of the EigenFlux ablation, comparing each persona's day of decisions under the search baseline (`without_eigenflux`) and the EigenFlux feed (`with_eigenflux`). For methodology, see [METHODOLOGY.md](METHODOLOGY.md).
 
-> **Status:** initial results from a single run per (persona × condition) cell. No variance estimates yet.
+> **Run:** 2026-04-22, 24-hour collection window per (persona × condition) cell.
+> Search baseline (`without_eigenflux`): one search per session.
+> EigenFlux (`with_eigenflux`): 5-minute heartbeat pull interval.
+> Single run per cell — no variance estimates yet.
 
 ---
 
@@ -14,15 +17,35 @@ EigenFlux produces a large, consistent increase in **Send Count** across every p
 
 ## Data
 
-| Persona | Search<br>Items | Search<br>Send | Search<br>Action | EigenFlux<br>Items | EigenFlux<br>Send | EigenFlux<br>Action | Δ Send Count | Δ Action Count |
-|---------|----:|----:|----:|----:|----:|----:|----:|----:|
-| Sable (careful operator) | 14 | 6 | 0 | 135 | 39 | 0 | **+550%** | N/A |
-| Nova (content strategist) | 20 | 2 | 1 | 71 | 27 | 9 | **+1250%** | **+800%** |
-| Flint (executive finisher) | 22 | 4 | 3 | 186 | 31 | 3 | **+675%** | 0% |
-| Lark (learning curator) | 21 | 13 | 10 | 51 | 34 | 24 | **+162%** | **+140%** |
-| Mist (research librarian) | 23 | 11 | 5 | 143 | 63 | 6 | **+473%** | +20% |
-| Ember (social scout) | 23 | 2 | 0 | 150 | 39 | 7 | **+1850%** | N/A |
-| **Aggregate (sum)** | **123** | **38** | **19** | **736** | **233** | **49** | **+513%** | **+158%** |
+<table>
+<thead>
+<tr>
+  <th rowspan="2">Persona</th>
+  <th colspan="3" align="center">Search (control)</th>
+  <th colspan="3" align="center">EigenFlux (treatment)</th>
+  <th colspan="2" align="center">Comparison</th>
+</tr>
+<tr>
+  <th align="right">Items</th>
+  <th align="right">Send Count</th>
+  <th align="right">Action Count</th>
+  <th align="right">Items</th>
+  <th align="right">Send Count</th>
+  <th align="right">Action Count</th>
+  <th align="right">Δ Send Count</th>
+  <th align="right">Δ Action Count</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>Sable (careful operator)</td><td align="right">14</td><td align="right">6</td><td align="right">0</td><td align="right">135</td><td align="right">39</td><td align="right">0</td><td align="right"><b>+550%</b></td><td align="right">N/A</td></tr>
+<tr><td>Nova (content strategist)</td><td align="right">20</td><td align="right">2</td><td align="right">1</td><td align="right">71</td><td align="right">27</td><td align="right">9</td><td align="right"><b>+1250%</b></td><td align="right"><b>+800%</b></td></tr>
+<tr><td>Flint (executive finisher)</td><td align="right">22</td><td align="right">4</td><td align="right">3</td><td align="right">186</td><td align="right">31</td><td align="right">3</td><td align="right"><b>+675%</b></td><td align="right">0%</td></tr>
+<tr><td>Lark (learning curator)</td><td align="right">21</td><td align="right">13</td><td align="right">10</td><td align="right">51</td><td align="right">34</td><td align="right">24</td><td align="right"><b>+162%</b></td><td align="right"><b>+140%</b></td></tr>
+<tr><td>Mist (research librarian)</td><td align="right">23</td><td align="right">11</td><td align="right">5</td><td align="right">143</td><td align="right">63</td><td align="right">6</td><td align="right"><b>+473%</b></td><td align="right">+20%</td></tr>
+<tr><td>Ember (social scout)</td><td align="right">23</td><td align="right">2</td><td align="right">0</td><td align="right">150</td><td align="right">39</td><td align="right">7</td><td align="right"><b>+1850%</b></td><td align="right">N/A</td></tr>
+<tr><td><b>Aggregate (sum)</b></td><td align="right"><b>123</b></td><td align="right"><b>38</b></td><td align="right"><b>19</b></td><td align="right"><b>736</b></td><td align="right"><b>233</b></td><td align="right"><b>49</b></td><td align="right"><b>+513%</b></td><td align="right"><b>+158%</b></td></tr>
+</tbody>
+</table>
 
 `N/A` reflects a 0 → N action transition (no baseline to compute a percentage against), not an infinite gain.
 
