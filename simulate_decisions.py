@@ -43,8 +43,11 @@ import sys
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# Default timezone: Asia/Shanghai (UTC+8)
+_CST = timezone(timedelta(hours=8))
 
 # ---------------------------------------------------------------------------
 # Paths & constants
@@ -154,10 +157,10 @@ def build_system_prompt(fixture: dict) -> str:
 
 def _parse_timestamp(ts: str) -> datetime:
     """Parse an ISO 8601 timestamp string into a timezone-aware datetime.
-    If no timezone info is present, assume UTC."""
+    Bare timestamps (no tz) are treated as Beijing time (UTC+8)."""
     dt = datetime.fromisoformat(ts)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=_CST)
     return dt
 
 

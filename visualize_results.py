@@ -103,13 +103,14 @@ def _backfill_summary(summary: dict, config: dict | None = None):
             end = config.get("end")
             if start and end:
                 try:
-                    from datetime import datetime, timezone
+                    from datetime import datetime, timedelta, timezone
+                    _CST = timezone(timedelta(hours=8))
                     d0 = datetime.fromisoformat(start)
                     d1 = datetime.fromisoformat(end)
                     if d0.tzinfo is None:
-                        d0 = d0.replace(tzinfo=timezone.utc)
+                        d0 = d0.replace(tzinfo=_CST)
                     if d1.tzinfo is None:
-                        d1 = d1.replace(tzinfo=timezone.utc)
+                        d1 = d1.replace(tzinfo=_CST)
                     days = max((d1 - d0).total_seconds() / 86400, 0.01)
                 except Exception:
                     pass
@@ -190,7 +191,7 @@ def _short_ts_range(start: str | None, end: str | None) -> str:
         try:
             dt = datetime.fromisoformat(ts)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=_CST)
             dt = dt.astimezone(_CST)
             parts.append(dt.strftime("%b %d %H:%M"))
         except Exception:
@@ -311,6 +312,28 @@ nav a:hover { text-decoration: underline; }
 """
 
 _JS = """
+// --- Dynamic timezone conversion ---
+function _fmtLocal(iso) {
+  if (!iso) return "open";
+  try {
+    var d = new Date(iso);
+    if (isNaN(d)) return iso.slice(0,16);
+    var mm = String(d.getMonth()+1).padStart(2,'0');
+    var dd = String(d.getDate()).padStart(2,'0');
+    var hh = String(d.getHours()).padStart(2,'0');
+    var mi = String(d.getMinutes()).padStart(2,'0');
+    return mm+'-'+dd+' '+hh+':'+mi;
+  } catch(e) { return iso.slice(0,16); }
+}
+document.querySelectorAll('[data-utc]').forEach(el => {
+  el.textContent = _fmtLocal(el.getAttribute('data-utc'));
+});
+document.querySelectorAll('[data-utc-start]').forEach(el => {
+  var s = _fmtLocal(el.getAttribute('data-utc-start'));
+  var e = _fmtLocal(el.getAttribute('data-utc-end'));
+  el.textContent = s + ' → ' + e;
+});
+// --- Row toggle ---
 document.querySelectorAll('.send-row').forEach(row => {
   row.addEventListener('click', () => {
     const detail = row.nextElementSibling;
@@ -463,7 +486,6 @@ def generate_experiment_html(exp: dict) -> str:
                 tag_cls = "tag-send" if action == "send" else "tag-action"
                 tag_text = "SEND" if action == "send" else "ACTION"
                 ts = d.get("pull_timestamp", "")
-                short_ts = ts[5:16] if len(ts) > 16 else ts
                 raw = d.get("raw_item", {})
                 title = _esc(raw.get("title") or raw.get("summary", "")[:80] or "")
                 body = _esc(raw.get("body") or raw.get("content", "")[:200] or d.get("content_preview", "")[:200])
@@ -486,7 +508,7 @@ def generate_experiment_html(exp: dict) -> str:
                     f'<div style="display:flex;justify-content:space-between;align-items:center;'
                     f'padding:4px 10px;background:var(--header-bg);border-bottom:1px solid var(--border)">'
                     f'<span class="tag {tag_cls}">{tag_text}</span>'
-                    f'<span style="font-size:0.75em;color:var(--muted)">{short_ts}</span></div>'
+                    f'<span style="font-size:0.75em;color:var(--muted)" data-utc="{_esc(ts)}"></span></div>'
                     f'<div style="padding:8px 10px">'
                     f'<div style="font-weight:600;font-size:0.9em;margin-bottom:4px">{title}</div>'
                     f'<div style="font-size:0.8em;color:var(--muted);margin-bottom:6px">{body}</div>'
@@ -529,7 +551,7 @@ def generate_experiment_html(exp: dict) -> str:
 <p class="meta">
   <span>Model: <b>{_esc(str(exp.get('model')))}</b></span>
   <span>Source: <b>{_esc(str(exp.get('source')))}</b></span>
-  <span>Data window: <b>{_esc(_short_ts_range(exp.get('start'), exp.get('end')))}</b></span>
+  <span>Data window: <b data-utc-start="{_esc(exp.get('start') or '')}" data-utc-end="{_esc(exp.get('end') or '')}"></b></span>
   <span>Data span: <b>{exp.get('data_days', '?')} days</b></span>
   <span>Sample: <b>{exp.get('sample') or 'all'}</b> (seed={exp.get('seed', '—')})</span>
   <span>Dedup: <b>{"semantic" if exp.get("semantic_dedup", False) else "URL only"}</b></span>
@@ -946,7 +968,7 @@ def generate_index_html() -> str:
                 f'{dry}'
                 f'</div>'
                 f'<div style="display:flex;gap:16px;font-size:0.82em;color:var(--muted);flex-wrap:wrap">'
-                f'<span title="Data time window">{_esc(_short_ts_range(e.get("start"), e.get("end")))}</span>'
+                f'<span title="Data time window" data-utc-start="{_esc(e.get("start") or "")}" data-utc-end="{_esc(e.get("end") or "")}"></span>'
                 f'<span title="Total items processed">{total_items} items</span>'
                 f'<span title="Average send rate">send: <b style="color:var(--fg)">{send_rate_str}</b></span>'
                 f'<span title="Number of fixtures">{n_fixtures} fixtures</span>'
@@ -984,6 +1006,26 @@ def generate_index_html() -> str:
 
     # JS: support N-way comparison (min 2, no max)
     index_js = """
+function _fmtLocal(iso) {
+  if (!iso) return "open";
+  try {
+    var d = new Date(iso);
+    if (isNaN(d)) return iso.slice(0,16);
+    var mm = String(d.getMonth()+1).padStart(2,'0');
+    var dd = String(d.getDate()).padStart(2,'0');
+    var hh = String(d.getHours()).padStart(2,'0');
+    var mi = String(d.getMinutes()).padStart(2,'0');
+    return mm+'-'+dd+' '+hh+':'+mi;
+  } catch(e) { return iso.slice(0,16); }
+}
+document.querySelectorAll('[data-utc]').forEach(function(el) {
+  el.textContent = _fmtLocal(el.getAttribute('data-utc'));
+});
+document.querySelectorAll('[data-utc-start]').forEach(function(el) {
+  var s = _fmtLocal(el.getAttribute('data-utc-start'));
+  var e = _fmtLocal(el.getAttribute('data-utc-end'));
+  el.textContent = s + ' \\u2192 ' + e;
+});
 function updateCompare() {
   var checks = document.querySelectorAll('.compare-check:checked');
   var bar = document.getElementById('compare-bar');
