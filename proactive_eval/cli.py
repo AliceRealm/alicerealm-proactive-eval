@@ -260,23 +260,88 @@ def cmd_simulate(args):
     # Load signals
     from proactive_eval.sources.eigenflux import EigenFluxSource
     from proactive_eval.sources.search import SearchSource
+    from proactive_eval.sources.replay import ReplaySource, ReplayConfig
 
     if args.source == "eigenflux":
         src = EigenFluxSource()
     elif args.source == "searches":
         src = SearchSource()
+    elif args.source == "replay":
+        # Build ranker_params from CLI args (only include non-None values)
+        ranker_params = {}
+        for key in ("alpha", "beta", "gamma", "delta",
+                     "min_relevance_score", "exploration_slots"):
+            val = getattr(args, key.replace("-", "_"), None)
+            if val is not None:
+                ranker_params[key] = val
+        recall_params = {}
+        for key in ("keyword_recall_size", "knn_recall_k"):
+            val = getattr(args, key, None)
+            if val is not None:
+                recall_params[key] = val
+        if getattr(args, "enable_knn_recall", False):
+            recall_params["enable_knn_recall"] = True
+
+        replay_config = ReplayConfig(
+            url=args.replay_url,
+            simulated_at=getattr(args, "simulated_at", None),
+            use_feed_history=getattr(args, "use_feed_history", False),
+            limit=getattr(args, "replay_limit", 50),
+            ranker_params=ranker_params,
+            recall_params=recall_params,
+        )
+        src = ReplaySource(config=replay_config)
+
+        # Health check
+        if not src.health_check():
+            print(f"Error: Replay API not reachable at {replay_config.url}")
+            print(f"Start it: cd repos/eigenflux && bash replay/scripts/start.sh")
+            sys.exit(1)
+        print(f"  Replay API: {replay_config.url} ✓")
+        if ranker_params:
+            print(f"  Ranker params: {ranker_params}")
+        if recall_params:
+            print(f"  Recall params: {recall_params}")
+        if replay_config.simulated_at:
+            print(f"  Simulated at: {replay_config.simulated_at}")
+
+        # Save replay config for reproducibility
+        config["replay"] = replay_config.to_dict()
     else:
         print(f"Error: unknown source '{args.source}'")
         sys.exit(1)
 
     # --- Pre-load all signals to auto-detect time range ---
     all_signals_by_fixture: dict[str, list] = {}
-    for fixture in fixtures:
-        fid = fixture["fixture_id"]
-        signals = src.replay(fid)
-        signals.sort(key=lambda s: s.received_at)
-        signals = dedup_signal_items(signals, semantic=semantic_dedup, verbose=False)
-        all_signals_by_fixture[fid] = signals
+    if args.source == "replay":
+        # Replay source: collect from API per fixture
+        for fixture in fixtures:
+            fid = fixture["fixture_id"]
+            agent_id = args.agent_id or fixture.get("eigenflux_profile", {}).get("agent_id")
+            if not agent_id:
+                print(f"  {fid}: no agent_id, skipped (set --agent-id or fixture config)")
+                continue
+            try:
+                signals = src.collect(fid, agent_id=agent_id)
+            except ConnectionError as e:
+                print(f"  {fid}: ERROR {e}")
+                continue
+            signals.sort(key=lambda s: s.received_at)
+            signals = dedup_signal_items(signals, semantic=semantic_dedup, verbose=False)
+            all_signals_by_fixture[fid] = signals
+            st = src.get_last_stats()
+            print(f"  {fid} (agent {agent_id}): {len(signals)} items | "
+                  f"recall kw={st.get('keyword_recall_count', '?')} "
+                  f"knn={st.get('knn_recall_count', '?')} "
+                  f"merged={st.get('merged_count', '?')} "
+                  f"{st.get('total_latency_ms', '?')}ms")
+    else:
+        for fixture in fixtures:
+            fid = fixture["fixture_id"]
+            signals = src.replay(fid)
+            signals.sort(key=lambda s: s.received_at)
+            signals = dedup_signal_items(signals, semantic=semantic_dedup, verbose=False)
+            all_signals_by_fixture[fid] = signals
 
     # Auto-detect time range from data if not specified
     if not args.start or not args.end:
@@ -524,7 +589,7 @@ def _select_fixtures(all_fixtures: list[dict], fixture_idx: int | None,
 def _make_simulate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", type=int, default=None)
-    parser.add_argument("--source", choices=["eigenflux", "searches"], default="eigenflux")
+    parser.add_argument("--source", choices=["eigenflux", "searches", "replay"], default="eigenflux")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--sample", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -541,6 +606,37 @@ def _make_simulate_parser() -> argparse.ArgumentParser:
     parser.add_argument("--action-rate-target", type=float, default=0.15)
     parser.add_argument("--config", default=None)
     parser.add_argument("--window", type=int, default=30)
+    # Replay API options (--source replay)
+    parser.add_argument("--replay-url", default="http://localhost:8092",
+                        help="Replay API URL (default: http://localhost:8092)")
+    parser.add_argument("--agent-id", type=int, default=None,
+                        help="Agent ID (overrides fixture config)")
+    parser.add_argument("--simulated-at", default=None,
+                        help="Time-travel: RFC3339 timestamp for ranking simulation")
+    parser.add_argument("--replay-limit", type=int, default=50,
+                        help="Max items from replay API per agent (default: 50)")
+    parser.add_argument("--use-feed-history", action="store_true",
+                        help="Apply bloom filter to exclude previously seen items")
+    # Ranker params
+    parser.add_argument("--alpha", type=float, default=None,
+                        help="Semantic similarity weight (replay ranker)")
+    parser.add_argument("--beta", type=float, default=None,
+                        help="Keyword overlap weight (replay ranker)")
+    parser.add_argument("--gamma", type=float, default=None,
+                        help="Freshness strength (replay ranker)")
+    parser.add_argument("--delta", type=float, default=None,
+                        help="Diversity penalty (replay ranker)")
+    parser.add_argument("--min-relevance-score", type=float, default=None,
+                        help="Drop items below this score (replay ranker)")
+    parser.add_argument("--exploration-slots", type=int, default=None,
+                        help="Number of exploration items (replay ranker)")
+    # Recall params
+    parser.add_argument("--keyword-recall-size", type=int, default=None,
+                        help="Keyword recall pool size (replay recall)")
+    parser.add_argument("--enable-knn-recall", action="store_true", default=False,
+                        help="Enable semantic/kNN recall (replay recall)")
+    parser.add_argument("--knn-recall-k", type=int, default=None,
+                        help="kNN recall K (replay recall)")
     return parser
 
 
@@ -577,7 +673,7 @@ def main():
     # --- simulate ---
     p_sim = subparsers.add_parser("simulate", help="Run simulation on collected signals")
     p_sim.add_argument("--fixture", type=int, default=None)
-    p_sim.add_argument("--source", choices=["eigenflux", "searches"], default="eigenflux")
+    p_sim.add_argument("--source", choices=["eigenflux", "searches", "replay"], default="eigenflux")
     p_sim.add_argument("--model", default=DEFAULT_MODEL)
     p_sim.add_argument("--sample", type=int, default=None)
     p_sim.add_argument("--seed", type=int, default=42)
@@ -594,6 +690,37 @@ def main():
     p_sim.add_argument("--action-rate-target", type=float, default=0.15)
     p_sim.add_argument("--config", default=None)
     p_sim.add_argument("--window", type=int, default=30)
+    # Replay API options (--source replay)
+    p_sim.add_argument("--replay-url", default="http://localhost:8092",
+                       help="Replay API URL (default: http://localhost:8092)")
+    p_sim.add_argument("--agent-id", type=int, default=None,
+                       help="Agent ID (overrides fixture config)")
+    p_sim.add_argument("--simulated-at", default=None,
+                       help="Time-travel: RFC3339 timestamp for ranking simulation")
+    p_sim.add_argument("--replay-limit", type=int, default=50,
+                       help="Max items from replay API per agent (default: 50)")
+    p_sim.add_argument("--use-feed-history", action="store_true",
+                       help="Apply bloom filter to exclude previously seen items")
+    # Ranker params
+    p_sim.add_argument("--alpha", type=float, default=None,
+                       help="Semantic similarity weight (replay ranker)")
+    p_sim.add_argument("--beta", type=float, default=None,
+                       help="Keyword overlap weight (replay ranker)")
+    p_sim.add_argument("--gamma", type=float, default=None,
+                       help="Freshness strength (replay ranker)")
+    p_sim.add_argument("--delta", type=float, default=None,
+                       help="Diversity penalty (replay ranker)")
+    p_sim.add_argument("--min-relevance-score", type=float, default=None,
+                       help="Drop items below this score (replay ranker)")
+    p_sim.add_argument("--exploration-slots", type=int, default=None,
+                       help="Number of exploration items (replay ranker)")
+    # Recall params
+    p_sim.add_argument("--keyword-recall-size", type=int, default=None,
+                       help="Keyword recall pool size (replay recall)")
+    p_sim.add_argument("--enable-knn-recall", action="store_true", default=False,
+                       help="Enable semantic/kNN recall (replay recall)")
+    p_sim.add_argument("--knn-recall-k", type=int, default=None,
+                       help="kNN recall K (replay recall)")
 
     # --- report ---
     p_report = subparsers.add_parser("report", help="Generate or serve reports")

@@ -118,4 +118,32 @@ def apply_config_to_args(parser: argparse.ArgumentParser,
         elif isinstance(fix_val, int):
             args.fixture = fix_val
 
+    # Replay config merging
+    replay_cfg = cfg.get("replay", {})
+    if replay_cfg:
+        replay_mappings = [
+            ("url", "replay_url"),
+            ("simulated_at", "simulated_at"),
+            ("limit", "replay_limit"),
+            ("use_feed_history", "use_feed_history"),
+        ]
+        for cfg_key, arg_dest in replay_mappings:
+            if cfg_key in replay_cfg and _arg_was_defaulted(parser, args, arg_dest):
+                setattr(args, arg_dest, replay_cfg[cfg_key])
+
+        # Ranker params from config file
+        ranker = replay_cfg.get("ranker_params", {})
+        for key in ("alpha", "beta", "gamma", "delta",
+                     "min_relevance_score", "exploration_slots"):
+            if key in ranker and _arg_was_defaulted(parser, args, key.replace("-", "_")):
+                setattr(args, key.replace("-", "_"), ranker[key])
+
+        # Recall params from config file
+        recall = replay_cfg.get("recall_params", {})
+        for key in ("keyword_recall_size", "knn_recall_k"):
+            if key in recall and _arg_was_defaulted(parser, args, key):
+                setattr(args, key, recall[key])
+        if recall.get("enable_knn_recall") and _arg_was_defaulted(parser, args, "enable_knn_recall"):
+            args.enable_knn_recall = True
+
     return cfg.get("pre_steps", [])
