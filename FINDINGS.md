@@ -105,7 +105,7 @@ For Flint and Mist, the ratio drops (75% → 10%, 45% → 10%) — EigenFlux's a
 
 ## Qualitative insights
 
-### 1. EigenFlux's primary value is opportunity density, not opportunity intensity
+### 1. EigenFlux's primary value is source-level enhancement
 
 The data is consistent with the methodology's framing of EigenFlux as a source-level enhancement. EigenFlux's gain is **upstream**: it puts more items the model considers worth surfacing in front of the agent. It does not, on this data, make those items disproportionately more action-worthy. The volume gain on Send Count (~6×) is real and consistent; the gain on Action Count (~2.6× aggregate) is smaller and uneven.
 
