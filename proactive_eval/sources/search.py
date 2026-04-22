@@ -1,20 +1,23 @@
-"""DuckDuckGo search signal source."""
+"""DuckDuckGo search signal source with LLM-generated queries."""
 
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from proactive_eval.types import SignalItem
 from proactive_eval.sources import SignalSource
-from proactive_eval.config import SCRIPT_DIR, rel_path
+from proactive_eval.config import SCRIPT_DIR, rel_path, load_fixtures
 
 DATA_DIR = SCRIPT_DIR / "data" / "searches"
 QUERIES_FILE = SCRIPT_DIR / "search_queries.json"
 MAX_RESULTS_PER_QUERY = 5
 SLEEP_BETWEEN_QUERIES = 5
+DEFAULT_NUM_QUERIES = 5
+QUERY_GEN_MODEL = "claude-haiku-4-5-20251001"
 
 
 class SearchSource(SignalSource):
@@ -28,22 +31,37 @@ class SearchSource(SignalSource):
         dry_run = kwargs.get("dry_run", False)
         max_results = kwargs.get("max_results", MAX_RESULTS_PER_QUERY)
         sleep_between = kwargs.get("sleep_between", SLEEP_BETWEEN_QUERIES)
-        queries_file = kwargs.get("queries_file", QUERIES_FILE)
+        llm_queries = kwargs.get("llm_queries", False)
+        num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES)
+        query_model = kwargs.get("query_model", QUERY_GEN_MODEL)
 
-        pairs = load_queries(queries_file)
-        fixture_pairs = [p for p in pairs if p["fixture"] == fixture_id]
-        if not fixture_pairs:
-            return []
+        if llm_queries:
+            # LLM-generated queries from fixture profile
+            fixture = _load_fixture(fixture_id)
+            if fixture is None:
+                print(f"  Warning: fixture {fixture_id} not found, skipping")
+                return []
+            queries = generate_queries(fixture, num_queries=num_queries,
+                                       model=query_model)
+            pair = {
+                "fixture": fixture_id,
+                "scenario": "llm_generated",
+                "queries": queries,
+            }
+        else:
+            # Legacy: read from static JSON
+            pairs = load_queries()
+            fixture_pairs = [p for p in pairs if p["fixture"] == fixture_id]
+            if not fixture_pairs:
+                return []
+            pair = fixture_pairs[0]
 
-        all_items = []
-        for pair in fixture_pairs:
-            result = collect_one_pair(pair, dry_run=dry_run,
-                                     max_results=max_results,
-                                     sleep_between=sleep_between)
-            if not dry_run:
-                save_result(fixture_id, result)
-            all_items.extend(_normalize_result(result, fixture_id))
-        return all_items
+        result = collect_one_pair(pair, dry_run=dry_run,
+                                 max_results=max_results,
+                                 sleep_between=sleep_between)
+        if not dry_run:
+            save_result(fixture_id, result)
+        return _normalize_result(result, fixture_id)
 
     def replay(self, fixture_id: str, data_dir: Path | None = None) -> list[SignalItem]:
         """Load all previously collected search results from disk."""
@@ -57,7 +75,101 @@ class SearchSource(SignalSource):
 
 
 # ---------------------------------------------------------------------------
-# Query loading
+# Fixture loading
+# ---------------------------------------------------------------------------
+
+def _load_fixture(fixture_id: str) -> dict | None:
+    fixtures = load_fixtures()
+    for f in fixtures:
+        if f["fixture_id"] == fixture_id:
+            return f
+    return None
+
+
+# ---------------------------------------------------------------------------
+# LLM query generation
+# ---------------------------------------------------------------------------
+
+def _build_profile_context(fixture: dict) -> str:
+    """Build a text summary of the fixture for the LLM to generate queries from."""
+    parts = []
+    # EigenFlux bio (most informative)
+    ef = fixture.get("eigenflux_profile", {})
+    if ef.get("bio"):
+        parts.append(f"Agent bio:\n{ef['bio']}")
+    # Workspace files (MEMORY, USER, etc.)
+    for name, content in fixture.get("workspace_files", {}).items():
+        parts.append(f"[{name}]\n{content}")
+    # Memory files
+    for name, content in fixture.get("memory_files", {}).items():
+        if name.endswith(".json"):
+            continue
+        parts.append(f"[{name}]\n{content}")
+    return "\n\n".join(parts)
+
+
+QUERY_GEN_PROMPT = """\
+You are simulating how an AI assistant would search the web to stay informed \
+for its user. Based on the agent profile below, generate exactly {n} web \
+search queries that this agent would realistically run right now.
+
+Rules:
+- Write natural language queries, like a person typing into Google (not SEO keywords)
+- Cover the agent's most important current concerns, not everything
+- Be specific to today's date ({today}) — include temporal context where relevant
+- Each query should be 4-12 words
+- Do NOT number them or add any explanation
+
+Output: one query per line, nothing else.
+
+---
+{profile}
+"""
+
+
+def generate_queries(fixture: dict, num_queries: int = DEFAULT_NUM_QUERIES,
+                     model: str = QUERY_GEN_MODEL) -> list[str]:
+    """Use an LLM to generate realistic search queries from a fixture profile."""
+    import anthropic
+
+    profile = _build_profile_context(fixture)
+    today = datetime.now().strftime("%B %d, %Y")
+
+    client = anthropic.Anthropic()
+    resp = client.messages.create(
+        model=model,
+        max_tokens=300,
+        temperature=0.7,
+        messages=[{
+            "role": "user",
+            "content": QUERY_GEN_PROMPT.format(n=num_queries, today=today,
+                                                profile=profile),
+        }],
+    )
+
+    text = resp.content[0].text.strip()
+    queries = [line.strip() for line in text.splitlines() if line.strip()]
+
+    # Strip leading numbers like "1." or "1)" if model adds them
+    cleaned = []
+    for q in queries:
+        for prefix in [".", ")", ":"]:
+            if len(q) > 2 and q[0].isdigit() and prefix in q[:4]:
+                q = q[q.index(prefix) + 1:].strip()
+                break
+        if q:
+            cleaned.append(q)
+
+    fixture_id = fixture.get("fixture_id", "?")
+    print(f"  LLM generated {len(cleaned)} queries for {fixture_id}:")
+    for i, q in enumerate(cleaned):
+        print(f"    {i+1}. {q}")
+
+    return cleaned[:num_queries]
+
+
+# ---------------------------------------------------------------------------
+# Query loading (legacy)
 # ---------------------------------------------------------------------------
 
 def load_queries(queries_file=QUERIES_FILE) -> list[dict]:
@@ -97,6 +209,7 @@ def collect_one_pair(pair: dict, dry_run: bool = False,
         "timestamp_utc": now.isoformat(),
         "timestamp_local": datetime.now().isoformat(),
         "query_count": len(queries),
+        "query_source": "llm" if scenario_id == "llm_generated" else "static",
         "results": []
     }
 

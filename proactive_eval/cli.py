@@ -17,8 +17,11 @@ import os
 import random
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# Default timezone: Asia/Shanghai (UTC+8)
+_CST = timezone(timedelta(hours=8))
 
 from proactive_eval.config import (
     SCRIPT_DIR, load_env, load_fixtures, load_experiment_config,
@@ -37,10 +40,25 @@ DEFAULT_MAX_TOKENS = 1024
 # ---------------------------------------------------------------------------
 
 def _parse_timestamp(ts: str) -> datetime:
+    """Parse ISO timestamp. Bare timestamps (no tz) are treated as Beijing time (UTC+8)."""
     dt = datetime.fromisoformat(ts)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=_CST)
     return dt
+
+
+def _fmt_cst(ts: str | datetime | None) -> str:
+    """Format a timestamp as Beijing time string for display."""
+    if ts is None:
+        return "?"
+    if isinstance(ts, str):
+        try:
+            ts = datetime.fromisoformat(ts)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=_CST)
+        except ValueError:
+            return ts
+    return ts.astimezone(_CST).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def filter_by_time(items: list[SignalItem],
@@ -132,10 +150,15 @@ def cmd_collect(args):
     cycle = 0
     while True:
         cycle += 1
-        print(f"[Cycle {cycle}] @ {datetime.now().isoformat()}")
+        print(f"[Cycle {cycle}] @ {datetime.now(_CST).strftime('%Y-%m-%d %H:%M:%S')}")
         for fix in fixtures:
             fid = fix["fixture_id"]
-            items = source.collect(fid, dry_run=args.dry_run)
+            collect_kwargs = {"dry_run": args.dry_run}
+            if args.source == "search" and getattr(args, "llm_queries", False):
+                collect_kwargs["llm_queries"] = True
+                collect_kwargs["num_queries"] = args.num_queries
+                collect_kwargs["query_model"] = args.query_model
+            items = source.collect(fid, **collect_kwargs)
             print(f"  {fid}: {len(items)} items")
 
         if total_cycles is not None and cycle >= total_cycles:
@@ -269,7 +292,7 @@ def cmd_simulate(args):
                 args.start = data_start.isoformat()
             if not args.end:
                 args.end = data_end.isoformat()
-            print(f"  Data time range: {args.start[:19]} → {args.end[:19]}")
+            print(f"  Data time range: {_fmt_cst(args.start)} → {_fmt_cst(args.end)} (Beijing)")
 
     # Update config with resolved time range
     config["start"] = args.start
@@ -294,7 +317,7 @@ def cmd_simulate(args):
     print(f"=== Decision Simulation ===")
     print(f"Experiment: {experiment_id}")
     print(f"Fixtures: {len(fixtures)} | Source: {args.source} | Model: {args.model}")
-    print(f"Time window: {args.start or '?'} → {args.end or '?'} ({days:.2f} days)")
+    print(f"Time window: {_fmt_cst(args.start)} → {_fmt_cst(args.end)} Beijing ({days:.2f} days)")
     if args.dry_run:
         print("  DRY-RUN mode")
     print()
@@ -544,6 +567,12 @@ def main():
     p_collect.add_argument("--dry-run", action="store_true")
     p_collect.add_argument("--skip-profile-sync", action="store_true",
                            help="Do not push fixture profiles at startup")
+    p_collect.add_argument("--llm-queries", action="store_true",
+                           help="Generate search queries via LLM instead of static JSON")
+    p_collect.add_argument("--num-queries", type=int, default=5,
+                           help="Number of queries to generate per fixture (default: 5)")
+    p_collect.add_argument("--query-model", default="claude-haiku-4-5-20251001",
+                           help="Model for query generation (default: claude-haiku-4-5-20251001)")
 
     # --- simulate ---
     p_sim = subparsers.add_parser("simulate", help="Run simulation on collected signals")
