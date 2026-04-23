@@ -178,6 +178,18 @@ def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
+def _clean_ra(ra) -> dict:
+    """Normalise recommended_action to {title, details}, stripping XML tag junk."""
+    import re
+    if not ra:
+        return {"title": "", "details": ""}
+    if isinstance(ra, dict):
+        return ra
+    # LLM sometimes returns a string with XML tag remnants
+    text = re.sub(r"<[^>]+>", "", str(ra)).strip()
+    return {"title": text, "details": ""}
+
+
 def _short_ts_range(start: str | None, end: str | None) -> str:
     if not start and not end:
         return "(no time window)"
@@ -487,22 +499,23 @@ def generate_experiment_html(exp: dict) -> str:
                 tag_text = "SEND" if action == "send" else "ACTION"
                 ts = d.get("pull_timestamp", "")
                 raw = d.get("raw_item", {})
-                title = _esc(raw.get("title") or raw.get("summary", "")[:80] or "")
-                body = _esc(raw.get("body") or raw.get("content", "")[:200] or d.get("content_preview", "")[:200])
+                title = _esc(raw.get("title") or raw.get("summary", "") or "")
+                body = _esc(raw.get("body") or raw.get("content", "") or d.get("content_preview", ""))
                 rationale = _esc(d["decision"].get("rationale", ""))
                 message = _esc(d["decision"].get("message") or "")
                 rec_html = ""
                 if action == "send_with_action":
-                    ra = d["decision"].get("recommended_action") or {}
-                    if isinstance(ra, str):
-                        ra = {"title": ra, "details": ""}
+                    ra = _clean_ra(d["decision"].get("recommended_action"))
+                    _ra_label = 'style="font-size:0.7em;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:0.05em;margin-top:6px;margin-bottom:2px"'
                     rec_html = (
-                        f'<div style="margin-top:6px;padding:6px 8px;background:var(--header-bg);'
+                        f'<div {_ra_label}>Recommended Action</div>'
+                        f'<div style="padding:6px 8px;background:var(--header-bg);'
                         f'border-radius:4px;border-left:3px solid var(--yellow)">'
                         f'<div style="font-weight:600;font-size:0.85em">{_esc(ra.get("title", ""))}</div>'
                         f'<div style="font-size:0.8em;color:var(--muted)">{_esc(ra.get("details", ""))}</div>'
                         f'</div>'
                     )
+                _label = 'style="font-size:0.7em;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:0.05em;margin-bottom:2px"'
                 cards.append(
                     f'<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden">'
                     f'<div style="display:flex;justify-content:space-between;align-items:center;'
@@ -510,12 +523,17 @@ def generate_experiment_html(exp: dict) -> str:
                     f'<span class="tag {tag_cls}">{tag_text}</span>'
                     f'<span style="font-size:0.75em;color:var(--muted)" data-utc="{_esc(ts)}"></span></div>'
                     f'<div style="padding:8px 10px">'
+                    f'<div {_label}>Source Content</div>'
                     f'<div style="font-weight:600;font-size:0.9em;margin-bottom:4px">{title}</div>'
-                    f'<div style="font-size:0.8em;color:var(--muted);margin-bottom:6px">{body}</div>'
+                    f'<details style="font-size:0.8em;color:var(--muted);margin-bottom:6px">'
+                    f'<summary style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                    f'{body[:120]}{"…" if len(body) > 120 else ""}</summary>'
+                    f'<div style="margin-top:4px;white-space:pre-wrap">{body}</div></details>'
+                    f'<div {_label}>Message to User</div>'
                     f'<div style="padding:6px 8px;background:var(--row-alt);border-radius:4px;'
                     f'font-size:0.85em;margin-bottom:4px;border-left:3px solid var(--accent)">{message}</div>'
                     f'<details style="font-size:0.8em;color:var(--muted)">'
-                    f'<summary style="cursor:pointer">Why this was sent</summary>'
+                    f'<summary style="cursor:pointer">Rationale</summary>'
                     f'<div style="margin-top:4px">{rationale}</div></details>'
                     f'{rec_html}'
                     f'</div></div>'
@@ -541,15 +559,40 @@ def generate_experiment_html(exp: dict) -> str:
             f'</div>'
         )
 
+    # Replay config summary
+    replay_cfg = exp.get("replay", {})
+    replay_html = ""
+    if replay_cfg:
+        ranker = replay_cfg.get("ranker_params", {})
+        recall = replay_cfg.get("recall_params", {})
+        params_parts = []
+        for k, v in sorted(ranker.items()):
+            params_parts.append(f"<code>{_esc(k)}={v}</code>")
+        for k, v in sorted(recall.items()):
+            params_parts.append(f"<code>{_esc(k)}={v}</code>")
+        if params_parts:
+            replay_html = (
+                f'<div style="margin:8px 0;padding:8px 12px;background:var(--row-alt);'
+                f'border-radius:6px;font-size:0.85em">'
+                f'<b>Replay Config:</b> {" &nbsp; ".join(params_parts)}'
+                f'</div>'
+            )
+
+    backend_str = exp.get("backend", "anthropic")
+    exp_name = exp.get("name", "")
+    title_display = f"{_esc(exp_name)}" if exp_name else f"Experiment: {_esc(eid)}"
+
     return f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Experiment {_esc(eid)}</title>
+<html><head><meta charset="utf-8"><title>{_esc(exp_name or eid)}</title>
 <style>{_CSS}</style></head><body>
 
 <nav><a href="../index.html" style="font-weight:600">&larr; All Experiments</a></nav>
 
-<h1>Experiment: {_esc(eid)}</h1>
+<h1>{title_display}</h1>
 <p class="meta">
+  <span>ID: <code>{_esc(eid)}</code></span>
   <span>Model: <b>{_esc(str(exp.get('model')))}</b></span>
+  <span>Backend: <b>{_esc(backend_str)}</b></span>
   <span>Source: <b>{_esc(str(exp.get('source')))}</b></span>
   <span>Data window: <b data-utc-start="{_esc(exp.get('start') or '')}" data-utc-end="{_esc(exp.get('end') or '')}"></b></span>
   <span>Data span: <b>{exp.get('data_days', '?')} days</b></span>
@@ -558,6 +601,7 @@ def generate_experiment_html(exp: dict) -> str:
   <span>Sim duration: <b>{_format_duration(exp.get('started_at'), exp.get('finished_at'))[0]}</b></span>
   {"<span><b>DRY RUN</b></span>" if exp.get('dry_run') else ""}
 </p>
+{replay_html}
 
 <h2>Per-Fixture Results</h2>
 <p style="font-size:0.8em;color:var(--muted)">
@@ -782,27 +826,33 @@ def generate_compare_html(experiments: list[dict]) -> str:
                     tag_cls = "tag-send" if action == "send" else "tag-action"
                     tag_text = "SEND" if action == "send" else "ACTION"
                     raw = d.get("raw_item", {})
-                    title = _esc(raw.get("title") or raw.get("summary", "")[:80] or "")
-                    body = _esc(raw.get("body") or raw.get("content", "")[:150] or d.get("content_preview", "")[:150])
+                    title = _esc(raw.get("title") or raw.get("summary", "") or "")
+                    body = _esc(raw.get("body") or raw.get("content", "") or d.get("content_preview", ""))
                     message = _esc(d["decision"].get("message") or "")
                     rationale = _esc(d["decision"].get("rationale", ""))
                     rec_html = ""
                     if action == "send_with_action":
-                        ra = d["decision"].get("recommended_action") or {}
-                        if isinstance(ra, str):
-                            ra = {"title": ra, "details": ""}
+                        ra = _clean_ra(d["decision"].get("recommended_action"))
+                        _ra_clbl = 'style="font-size:0.65em;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:0.05em;margin-top:4px;margin-bottom:1px"'
                         rec_html = (
-                            f'<div style="margin-top:4px;padding:4px 6px;background:var(--header-bg);'
+                            f'<div {_ra_clbl}>Recommended Action</div>'
+                            f'<div style="padding:4px 6px;background:var(--header-bg);'
                             f'border-radius:3px;border-left:2px solid var(--yellow);font-size:0.8em">'
                             f'<b>{_esc(ra.get("title", ""))}</b> {_esc(ra.get("details", ""))}</div>'
                         )
+                    _clbl = 'style="font-size:0.65em;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:0.05em;margin-bottom:1px"'
                     cards.append(
                         f'<div style="border:1px solid var(--border);border-radius:5px;margin-bottom:6px;'
                         f'padding:8px;font-size:0.82em">'
                         f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
                         f'<span class="tag {tag_cls}">{tag_text}</span></div>'
+                        f'<div {_clbl}>Source Content</div>'
                         f'<div style="font-weight:600;margin-bottom:3px">{title}</div>'
-                        f'<div style="color:var(--muted);margin-bottom:4px;font-size:0.9em">{body}</div>'
+                        f'<details style="color:var(--muted);margin-bottom:4px;font-size:0.9em">'
+                        f'<summary style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                        f'{body[:100]}{"…" if len(body) > 100 else ""}</summary>'
+                        f'<div style="margin-top:4px;white-space:pre-wrap">{body}</div></details>'
+                        f'<div {_clbl}>Message to User</div>'
                         f'<div style="padding:4px 6px;background:var(--row-alt);border-radius:3px;'
                         f'border-left:2px solid {c}">{message}</div>'
                         f'<details style="font-size:0.85em;color:var(--muted);margin-top:3px">'
@@ -848,6 +898,48 @@ def generate_compare_html(experiments: list[dict]) -> str:
 
     title_parts = " vs ".join(_esc(el["source"]) for el in exp_labels)
 
+    # --- Config diff table ---
+    config_diff_html = ""
+    config_keys_to_compare = [
+        ("model", "Model"), ("backend", "Backend"), ("source", "Source"),
+        ("workers", "Workers"), ("data_days", "Data Days"),
+    ]
+    # Collect replay ranker/recall params across experiments
+    all_replay_keys: set[str] = set()
+    for el in exp_labels:
+        rp = el["exp"].get("replay", {})
+        all_replay_keys.update(rp.get("ranker_params", {}).keys())
+        all_replay_keys.update(rp.get("recall_params", {}).keys())
+
+    diff_rows = []
+    for key, label in config_keys_to_compare:
+        vals = [str(el["exp"].get(key, "—")) for el in exp_labels]
+        if len(set(vals)) > 1:  # only show if different
+            cells = "".join(f'<td><code>{_esc(v)}</code></td>' for v in vals)
+            diff_rows.append(f'<tr><td style="font-weight:600">{_esc(label)}</td>{cells}</tr>')
+    for rkey in sorted(all_replay_keys):
+        vals = []
+        for el in exp_labels:
+            rp = el["exp"].get("replay", {})
+            v = rp.get("ranker_params", {}).get(rkey, rp.get("recall_params", {}).get(rkey, "—"))
+            vals.append(str(v))
+        cells = "".join(f'<td><code>{_esc(v)}</code></td>' for v in vals)
+        is_diff = len(set(vals)) > 1
+        style = ' style="background:var(--row-alt)"' if is_diff else ""
+        diff_rows.append(f'<tr{style}><td style="font-weight:600">{_esc(rkey)}</td>{cells}</tr>')
+
+    if diff_rows:
+        headers = "".join(
+            f'<th style="border-bottom:3px solid {el["color"]["hex"]}">{_esc(el["source"])}</th>'
+            for el in exp_labels
+        )
+        config_diff_html = (
+            f'<details open style="margin:1em 0"><summary style="font-weight:600;cursor:pointer">'
+            f'Config Comparison</summary>'
+            f'<table style="font-size:0.85em"><tr><th>Param</th>{headers}</tr>'
+            f'{"".join(diff_rows)}</table></details>'
+        )
+
     compare_css = """
 .exec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
              gap: 12px; margin: 1.2em 0; }
@@ -861,6 +953,7 @@ def generate_compare_html(experiments: list[dict]) -> str:
 
 <h1>Compare: {title_parts}</h1>
 <p class="meta">{"&nbsp;&nbsp;vs&nbsp;&nbsp;".join(meta_parts)}</p>
+{config_diff_html}
 
 <h2>Executive Summary</h2>
 {exec_summary}
@@ -910,6 +1003,7 @@ def generate_index_html() -> str:
             duration, complete = _format_duration(e.get("started_at"), e.get("finished_at"))
             status_color = "var(--green)" if complete else "var(--yellow)"
             n_fixtures = len(e.get("fixtures", []))
+            exp_name = e.get("name", "")
 
             # Count total items
             total_items = 0
@@ -948,6 +1042,8 @@ def generate_index_html() -> str:
                 badge_color = COLOR_PALETTE[0]["hex"]
             elif "search" in source_lower:
                 badge_color = COLOR_PALETTE[1]["hex"]
+            elif "replay" in source_lower:
+                badge_color = COLOR_PALETTE[2]["hex"]
             else:
                 badge_color = "var(--muted)"
 
@@ -956,16 +1052,40 @@ def generate_index_html() -> str:
                        f'border:1px solid var(--border);background:var(--bg);color:var(--red);'
                        f'border-radius:3px;opacity:0.6" title="Delete experiment">&times;</button>')
 
+            # Config params display
+            config_tags = []
+            replay_cfg = e.get("replay", {})
+            ranker = replay_cfg.get("ranker_params", {})
+            recall = replay_cfg.get("recall_params", {})
+            for k, v in sorted(ranker.items()):
+                config_tags.append(
+                    f'<span style="display:inline-block;padding:1px 6px;border-radius:3px;'
+                    f'font-size:0.75em;background:var(--header-bg);border:1px solid var(--border);'
+                    f'font-family:monospace">{_esc(k)}={v}</span>')
+            for k, v in sorted(recall.items()):
+                config_tags.append(
+                    f'<span style="display:inline-block;padding:1px 6px;border-radius:3px;'
+                    f'font-size:0.75em;background:var(--header-bg);border:1px solid var(--border);'
+                    f'font-family:monospace">{_esc(k)}={v}</span>')
+            config_html = f' <span style="display:inline-flex;gap:4px;flex-wrap:wrap">{"".join(config_tags)}</span>' if config_tags else ""
+
+            # Name line
+            name_html = ""
+            if exp_name:
+                name_html = f'<div style="font-weight:700;font-size:1em;margin-bottom:4px">{_esc(exp_name)}</div>'
+
             group_cards.append(
                 f'<div class="exp-card" onclick="window.location=\'{_esc(eid)}/index.html\'">'
                 f'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
                 f'<div style="flex:1">'
+                f'{name_html}'
                 f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
                 f'<input type="checkbox" class="compare-check" value="{_esc(eid)}" onclick="event.stopPropagation();updateCompare()">'
                 f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{badge_color}"></span>'
                 f'<span style="font-weight:600;font-size:0.9em">{_esc(source)}</span>'
                 f'<span style="font-size:0.8em;color:var(--muted)">{_esc(model_short)}</span>'
                 f'{dry}'
+                f'{config_html}'
                 f'</div>'
                 f'<div style="display:flex;gap:16px;font-size:0.82em;color:var(--muted);flex-wrap:wrap">'
                 f'<span title="Data time window" data-utc-start="{_esc(e.get("start") or "")}" data-utc-end="{_esc(e.get("end") or "")}"></span>'
@@ -1154,6 +1274,23 @@ class _Handler(SimpleHTTPRequestHandler):
                     return
             self.send_error(400, "Need at least 2 valid exp= params")
             return
+
+        # Regenerate cached compare pages on access (so everyone gets fresh HTML)
+        import re
+        m = re.match(r"^/(compare_[^/]+)/index\.html$", self.path)
+        if m:
+            cache_name = m.group(1)
+            parts = cache_name.removeprefix("compare_").split("_vs_")
+            experiments = []
+            for eid in parts:
+                exp = load_experiment(EXPERIMENTS_DIR / eid, include_decisions=True)
+                if exp:
+                    experiments.append(exp)
+            if len(experiments) >= 2:
+                html = generate_compare_html(experiments)
+                cache_dir = EXPERIMENTS_DIR / cache_name
+                cache_dir.mkdir(exist_ok=True)
+                (cache_dir / "index.html").write_text(html)
 
         super().do_GET()
 

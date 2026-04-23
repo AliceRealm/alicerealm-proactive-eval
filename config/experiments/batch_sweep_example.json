@@ -1,0 +1,64 @@
+{
+  "defaults": {
+    "source": "replay",
+    "backend": "openai",
+    "workers": 16,
+    "fixtures": "all",
+    "replay": {
+      "url": "http://localhost:8092",
+      "limit": 50
+    }
+  },
+  "experiments": [
+    {
+      "name": "baseline_default",
+      "replay": {
+        "url": "http://localhost:8092",
+        "limit": 50,
+        "ranker_params": {}
+      }
+    },
+    {
+      "name": "semantic_heavy",
+      "replay": {
+        "url": "http://localhost:8092",
+        "limit": 50,
+        "ranker_params": {
+          "alpha": 0.9,
+          "beta": 0.2
+        }
+      }
+    },
+    {
+      "name": "keyword_heavy",
+      "replay": {
+        "url": "http://localhost:8092",
+        "limit": 50,
+        "ranker_params": {
+          "alpha": 0.2,
+          "beta": 0.9
+        }
+      }
+    },
+    {
+      "name": "high_freshness",
+      "replay": {
+        "url": "http://localhost:8092",
+        "limit": 50,
+        "ranker_params": {
+          "gamma": 2.0
+        }
+      }
+    },
+    {
+      "name": "high_diversity",
+      "replay": {
+        "url": "http://localhost:8092",
+        "limit": 50,
+        "ranker_params": {
+          "delta": 0.5
+        }
+      }
+    }
+  ]
+}

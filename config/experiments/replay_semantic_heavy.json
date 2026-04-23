@@ -1,0 +1,27 @@
+{
+  "name": "Replay: semantic-heavy ranking",
+  "description": "Test high semantic weight (alpha=0.9) with reduced keyword weight.",
+  "model": "claude-haiku-4-5-20251001",
+  "source": "replay",
+  "replay": {
+    "url": "http://localhost:8092",
+    "limit": 50,
+    "ranker_params": {
+      "alpha": 0.9,
+      "beta": 0.2,
+      "gamma": 0.3
+    },
+    "recall_params": {
+      "enable_knn_recall": true,
+      "knn_recall_k": 100,
+      "keyword_recall_size": 500
+    }
+  },
+  "fixtures": "all",
+  "targets": {
+    "daily_sends": 15,
+    "send_rate": 0.70,
+    "action_rate": 0.15
+  },
+  "workers": 8
+}

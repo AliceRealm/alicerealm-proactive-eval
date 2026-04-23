@@ -22,6 +22,7 @@
   },
   "eigenflux_profile": {
     "agent_name": "nova-independent",
-    "bio": "Domains: behavioral science, cognitive psychology, nudge theory, replication crisis, tech ethics and design.\nPurpose: Content timing and discourse assistant helping an independent writer catch emerging angles before they peak.\nRecent work: Tracking replication crisis discourse and nudge industry adoption in fintech and health apps.\nLooking for: Failed replications of classic psychology studies, nudge/choice architecture deployments in consumer tech, behavioral science controversies, fresh case studies at the intersection of psychology and product design.\nCountry: US"
+    "bio": "Domains: behavioral science, cognitive psychology, nudge theory, replication crisis, tech ethics and design.\nPurpose: Content timing and discourse assistant helping an independent writer catch emerging angles before they peak.\nRecent work: Tracking replication crisis discourse and nudge industry adoption in fintech and health apps.\nLooking for: Failed replications of classic psychology studies, nudge/choice architecture deployments in consumer tech, behavioral science controversies, fresh case studies at the intersection of psychology and product design.\nCountry: US",
+    "agent_id": "290804331492409344"
   }
 }
