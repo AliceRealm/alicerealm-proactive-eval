@@ -1,0 +1,26 @@
+{
+  "name": "Replay: server defaults",
+  "description": "Baseline: evaluate the current production ranking config via the Replay API.",
+  "model": "claude-haiku-4-5-20251001",
+  "source": "replay",
+  "replay": {
+    "url": "http://localhost:8092",
+    "limit": 50,
+    "use_feed_history": false,
+    "ranker_params": {
+      "alpha": 0.80,
+      "beta": 0.20,
+      "gamma": 0.02,
+      "delta": 0.0,
+      "min_relevance_score": 0.25
+    },
+    "recall_params": {}
+  },
+  "fixtures": "all",
+  "targets": {
+    "daily_sends": 15,
+    "send_rate": 0.70,
+    "action_rate": 0.15
+  },
+  "workers": 8
+}

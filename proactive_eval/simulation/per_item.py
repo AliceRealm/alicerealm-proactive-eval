@@ -1,6 +1,10 @@
 """Per-item decision harness: current behavior wrapped as a SimulationHarness.
 
-Each signal item gets an independent Claude call with forced tool_choice.
+Each signal item gets an independent LLM call with forced tool_choice.
+Supports two backends:
+  - "anthropic" (default): Anthropic Claude API via anthropic SDK
+  - "openai": Any OpenAI-compatible API (Qwen, DeepSeek, etc.) via openai SDK
+
 Maintains a RollingContext for dedup awareness.
 """
 
@@ -109,6 +113,19 @@ TOOL_NAME_TO_ACTION = {
     "decide_send_with_action": "send_with_action",
 }
 
+# OpenAI-compatible tool format (for Qwen, DeepSeek, etc.)
+DECIDE_TOOLS_OPENAI = [
+    {
+        "type": "function",
+        "function": {
+            "name": t["name"],
+            "description": t["description"],
+            "parameters": t["input_schema"],
+        },
+    }
+    for t in DECIDE_TOOLS
+]
+
 
 # ---------------------------------------------------------------------------
 # Prompt building
@@ -197,6 +214,7 @@ def build_user_message(item: dict, context_block: str = "") -> str:
 # ---------------------------------------------------------------------------
 
 def parse_decision(resp) -> dict:
+    """Parse Anthropic API response for tool_use decision."""
     for block in getattr(resp, "content", []) or []:
         btype = getattr(block, "type", None)
         bname = getattr(block, "name", None)
@@ -207,6 +225,39 @@ def parse_decision(resp) -> dict:
                 decision.update(inp)
                 return decision
     return {"action": "skip", "tool_name": None, "rationale": "no decide_* tool_use in response"}
+
+
+def parse_decision_openai(resp) -> dict:
+    """Parse OpenAI-compatible API response for function call decision."""
+    msg = resp.choices[0].message if resp.choices else None
+    if not msg:
+        return {"action": "skip", "tool_name": None, "rationale": "empty response"}
+
+    tool_calls = getattr(msg, "tool_calls", None) or []
+    for tc in tool_calls:
+        fn = tc.function
+        name = fn.name
+        if name in TOOL_NAME_TO_ACTION:
+            try:
+                args = json.loads(fn.arguments) if isinstance(fn.arguments, str) else fn.arguments
+            except (json.JSONDecodeError, TypeError):
+                args = {}
+            decision = {"action": TOOL_NAME_TO_ACTION[name], "tool_name": name}
+            if isinstance(args, dict):
+                decision.update(args)
+            return decision
+
+    # Fallback: try parsing text content as JSON (some models don't use tool_calls)
+    content = getattr(msg, "content", "") or ""
+    if content.strip():
+        try:
+            data = json.loads(content)
+            if isinstance(data, dict) and "action" in data:
+                return data
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return {"action": "skip", "tool_name": None, "rationale": "no function call in response"}
 
 
 def validate_decision(decision: dict) -> tuple[bool, str]:
@@ -228,10 +279,15 @@ def validate_decision(decision: dict) -> tuple[bool, str]:
     return True, ""
 
 
-def usage_dict(resp) -> dict:
+def usage_dict(resp, backend: str = "anthropic") -> dict:
     usage = getattr(resp, "usage", None)
     if not usage:
         return {}
+    if backend == "openai":
+        return {
+            "input_tokens": getattr(usage, "prompt_tokens", None),
+            "output_tokens": getattr(usage, "completion_tokens", None),
+        }
     return {
         "input_tokens": getattr(usage, "input_tokens", None),
         "output_tokens": getattr(usage, "output_tokens", None),
@@ -243,16 +299,18 @@ def usage_dict(resp) -> dict:
 # ---------------------------------------------------------------------------
 
 class PerItemHarness(SimulationHarness):
-    """Replicates current simulate_decisions.py behavior.
+    """Per-item decision harness.
 
-    Each signal item gets an independent Claude call with forced tool_choice.
+    Each signal item gets an independent LLM call with forced tool_choice.
     Maintains a RollingContext for dedup awareness.
+
+    Supports backend="anthropic" (default) or backend="openai" (Qwen, DeepSeek, etc.).
     """
 
     def __init__(self, client=None, model: str = "claude-haiku-4-5-20251001",
                  max_tokens: int = 1024, temperature: float | None = None,
                  window_size: int = 30, dry_run: bool = False,
-                 workers: int = 4):
+                 workers: int = 4, backend: str = "anthropic"):
         self.client = client
         self.model = model
         self.max_tokens = max_tokens
@@ -260,6 +318,7 @@ class PerItemHarness(SimulationHarness):
         self.window_size = window_size
         self.dry_run = dry_run
         self.workers = workers
+        self.backend = backend
         self.system_prompt = ""
         self.rolling_ctx = RollingContext(window_size=window_size)
         self.fixture_id = ""
@@ -362,6 +421,7 @@ class PerItemHarness(SimulationHarness):
             "decision_id": str(uuid.uuid4()),
             "fixture_id": self.fixture_id,
             "model": self.model,
+            "backend": self.backend,
             "source": item.get("source", ""),
             "pull_timestamp": item.get("received_at", ""),
             "source_metadata": item.get("metadata", {}),
@@ -396,23 +456,14 @@ class PerItemHarness(SimulationHarness):
         t0 = time.time()
         api_error = None
         decision = None
+        usage = {}
         try:
-            kwargs: dict = dict(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                system=self.system_prompt,
-                tools=DECIDE_TOOLS,
-                tool_choice={"type": "any"},
-                messages=[{"role": "user", "content": user_msg}],
-            )
-            if self.temperature is not None:
-                kwargs["temperature"] = self.temperature
-            resp = self.client.messages.create(**kwargs)
-            decision = parse_decision(resp)
-            usage = usage_dict(resp)
+            if self.backend == "openai":
+                decision, usage = self._call_openai(user_msg)
+            else:
+                decision, usage = self._call_anthropic(user_msg)
         except Exception as exc:
             api_error = f"{type(exc).__name__}: {exc}"
-            usage = {}
         latency_ms = int((time.time() - t0) * 1000)
 
         if decision is None:
@@ -429,6 +480,46 @@ class PerItemHarness(SimulationHarness):
             "error": api_error,
         }
         return log_entry
+
+    def _call_anthropic(self, user_msg: str) -> tuple[dict, dict]:
+        """Call Anthropic Claude API."""
+        kwargs: dict = dict(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=self.system_prompt,
+            tools=DECIDE_TOOLS,
+            tool_choice={"type": "any"},
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        if self.temperature is not None:
+            kwargs["temperature"] = self.temperature
+        resp = self.client.messages.create(**kwargs)
+        return parse_decision(resp), usage_dict(resp, "anthropic")
+
+    def _call_openai(self, user_msg: str) -> tuple[dict, dict]:
+        """Call OpenAI-compatible API (Qwen, DeepSeek, etc.).
+
+        Qwen3 thinking mode doesn't support tool_choice=required,
+        so we disable thinking via extra_body and use tool_choice=required.
+        If that fails, fall back to tool_choice=auto.
+        """
+        kwargs: dict = dict(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            tools=DECIDE_TOOLS_OPENAI,
+            tool_choice="required",
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            # Disable Qwen3 thinking mode to support tool_choice=required
+            # and reduce token waste
+            extra_body={"enable_thinking": False},
+        )
+        if self.temperature is not None:
+            kwargs["temperature"] = self.temperature
+        resp = self.client.chat.completions.create(**kwargs)
+        return parse_decision_openai(resp), usage_dict(resp, "openai")
 
     def finalize(self) -> dict:
         return {

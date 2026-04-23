@@ -35,6 +35,11 @@ DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_MAX_TOKENS = 1024
 
 
+def _infer_backend(model: str) -> str:
+    """Infer LLM backend from model name: claude-* → anthropic, else openai."""
+    return "anthropic" if model.startswith("claude") else "openai"
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -74,18 +79,44 @@ def filter_by_time(items: list[SignalItem],
     ]
 
 
-AUTO_SAMPLE_THRESHOLD = 500  # per-fixture: auto-sample when items exceed this
-AUTO_SAMPLE_SIZE = 400       # target sample size when auto-sampling
+import math
+
+# Auto-sample parameters (Cochran's formula for proportion estimation)
+AUTO_SAMPLE_MARGIN = 0.05    # target margin of error: ±5%
+AUTO_SAMPLE_CONFIDENCE = 1.96  # z-score for 95% confidence
+AUTO_SAMPLE_P = 0.5          # worst-case proportion (maximizes required n)
+AUTO_SAMPLE_MIN_N = 50       # never sample fewer than this
+
+
+def _cochran_sample_size(population: int, margin: float = AUTO_SAMPLE_MARGIN,
+                         z: float = AUTO_SAMPLE_CONFIDENCE,
+                         p: float = AUTO_SAMPLE_P) -> int:
+    """Cochran's formula with finite population correction.
+
+    n0 = z^2 * p * (1-p) / margin^2   (infinite population)
+    n  = n0 / (1 + (n0-1)/N)          (finite correction)
+
+    For margin=0.05, z=1.96, p=0.5: n0=384.
+    With N=500 → n=217, N=1000 → n=278, N=10000 → n=370.
+    """
+    n0 = (z ** 2 * p * (1 - p)) / (margin ** 2)
+    n = n0 / (1 + (n0 - 1) / population)
+    return max(int(math.ceil(n)), AUTO_SAMPLE_MIN_N)
 
 
 def sample_items(items: list[SignalItem], sample_size: int | None,
                  seed: int = 42, auto: bool = True) -> tuple[list[SignalItem], int]:
     population = len(items)
-    # Auto-sample: if no explicit sample_size and population exceeds threshold
-    if sample_size is None and auto and population > AUTO_SAMPLE_THRESHOLD:
-        sample_size = AUTO_SAMPLE_SIZE
-        print(f"    [auto-sample] {population} items > {AUTO_SAMPLE_THRESHOLD} threshold, "
-              f"sampling {sample_size}")
+    # Auto-sample using Cochran's formula when population is large
+    if sample_size is None and auto:
+        target_n = _cochran_sample_size(population)
+        if target_n < population:
+            sample_size = target_n
+            actual_margin = AUTO_SAMPLE_CONFIDENCE * math.sqrt(
+                AUTO_SAMPLE_P * (1 - AUTO_SAMPLE_P) / target_n
+            )
+            print(f"    [auto-sample] {population} items → sampling {sample_size} "
+                  f"(95% CI ±{actual_margin:.1%})")
     if sample_size is None or sample_size >= population:
         return items, population
     rng = random.Random(seed)
@@ -205,18 +236,42 @@ def cmd_simulate(args):
             print(f"Running pre-step: {step_name}")
             handler(fixtures)
 
-    # Set up Claude client
+    # Determine backend from model name
+    backend = _infer_backend(args.model)
+
+    # Set up LLM client
     client = None
     if not args.dry_run:
-        try:
-            import anthropic
-        except ImportError:
-            print("Error: `anthropic` not installed. Use --dry-run or pip install anthropic.")
-            sys.exit(1)
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            print("Error: ANTHROPIC_API_KEY not set.")
-            sys.exit(1)
-        client = anthropic.Anthropic()
+        if backend == "openai":
+            try:
+                from openai import OpenAI
+            except ImportError:
+                print("Error: `openai` not installed. pip install openai")
+                sys.exit(1)
+            api_key = os.environ.get("LLM_API_KEY", "")
+            base_url = os.environ.get("LLM_BASE_URL", "")
+            if not api_key:
+                print("Error: LLM_API_KEY not set (needed for --backend openai).")
+                sys.exit(1)
+            if not base_url:
+                print("Error: LLM_BASE_URL not set (needed for --backend openai).")
+                sys.exit(1)
+            client = OpenAI(api_key=api_key, base_url=base_url)
+            # Auto-detect model from env if not overridden
+            if args.model == DEFAULT_MODEL and os.environ.get("LLM_MODEL"):
+                args.model = os.environ["LLM_MODEL"]
+            print(f"  Backend: openai ({base_url})")
+            print(f"  Model: {args.model}")
+        else:
+            try:
+                import anthropic
+            except ImportError:
+                print("Error: `anthropic` not installed. Use --dry-run or pip install anthropic.")
+                sys.exit(1)
+            if not os.environ.get("ANTHROPIC_API_KEY"):
+                print("Error: ANTHROPIC_API_KEY not set.")
+                sys.exit(1)
+            client = anthropic.Anthropic()
 
     # Create experiment directory
     experiment_id = make_experiment_id(args.model)
@@ -224,12 +279,16 @@ def cmd_simulate(args):
     experiment_dir.mkdir(parents=True, exist_ok=True)
 
     semantic_dedup = not args.no_semantic_dedup
+    # Replay source: server-side ranking already deduped, skip expensive embedding calls
+    if args.source == "replay":
+        semantic_dedup = False
 
     # Save experiment config
     config = {
         "experiment_id": experiment_id,
         "resolved_from": config_file_path,
         "model": args.model,
+        "backend": backend,
         "max_tokens": args.max_tokens,
         "temperature": args.temperature,
         "source": args.source,
@@ -286,7 +345,7 @@ def cmd_simulate(args):
             url=args.replay_url,
             simulated_at=getattr(args, "simulated_at", None),
             use_feed_history=getattr(args, "use_feed_history", False),
-            limit=getattr(args, "replay_limit", 50),
+            limit=getattr(args, "replay_limit", None),
             ranker_params=ranker_params,
             recall_params=recall_params,
         )
@@ -318,6 +377,8 @@ def cmd_simulate(args):
         for fixture in fixtures:
             fid = fixture["fixture_id"]
             agent_id = args.agent_id or fixture.get("eigenflux_profile", {}).get("agent_id")
+            if agent_id is not None:
+                agent_id = int(agent_id)
             if not agent_id:
                 print(f"  {fid}: no agent_id, skipped (set --agent-id or fixture config)")
                 continue
@@ -416,6 +477,7 @@ def cmd_simulate(args):
             window_size=getattr(args, "window", 30),
             dry_run=args.dry_run,
             workers=args.workers,
+            backend=backend,
         )
 
         trajectory = run_simulation(
@@ -436,6 +498,12 @@ def cmd_simulate(args):
         scored = score_trajectory(trajectory, extractor, scorer)
         scored.stats["population_size"] = population
         scored.stats["sample_size"] = len(signals)
+        # Record margin of error for sampled experiments
+        n = len(signals)
+        if n < population and n > 0:
+            sr = scored.stats.get("send_rate", 0.5)
+            margin = AUTO_SAMPLE_CONFIDENCE * math.sqrt(sr * (1 - sr) / n)
+            scored.stats["margin_of_error_95"] = round(margin, 4)
         all_scored.append(scored)
 
         stats = scored.stats
@@ -558,6 +626,74 @@ def cmd_setup(args):
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: batch
+# ---------------------------------------------------------------------------
+
+def cmd_batch(args):
+    """Run multiple experiment configs in sequence (parameter sweep)."""
+    batch_path = Path(args.batch_config)
+    if not batch_path.exists():
+        print(f"Error: batch config not found: {batch_path}")
+        sys.exit(1)
+
+    batch_cfg = json.loads(batch_path.read_text())
+    experiments = batch_cfg.get("experiments", [])
+    if not experiments:
+        print("Error: 'experiments' array is empty in batch config")
+        sys.exit(1)
+
+    # Shared defaults
+    defaults = batch_cfg.get("defaults", {})
+
+    print(f"=== Batch Run: {len(experiments)} experiments ===\n")
+    experiment_ids = []
+
+    for i, exp_cfg in enumerate(experiments):
+        # Merge defaults with per-experiment overrides
+        merged = {**defaults, **exp_cfg}
+        name = merged.get("name", f"exp_{i+1}")
+        print(f"[{i+1}/{len(experiments)}] {name}")
+
+        # Write a temp config file
+        tmp_config = EXPERIMENTS_DIR / f"_batch_tmp_{i}.json"
+        tmp_config.parent.mkdir(parents=True, exist_ok=True)
+        tmp_config.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
+
+        # Build simulate args
+        sim_parser = _make_simulate_parser()
+        sim_args = sim_parser.parse_args([])
+        sim_args.config = str(tmp_config)
+
+        # Apply overrides that aren't in config file format
+        for key in ("workers",):
+            if key in merged:
+                setattr(sim_args, key, merged[key])
+
+        try:
+            cmd_simulate(sim_args)
+            # Find the experiment ID from the latest directory
+            if EXPERIMENTS_DIR.exists():
+                dirs = sorted([d for d in EXPERIMENTS_DIR.iterdir()
+                              if d.is_dir() and not d.name.startswith("_")])
+                if dirs:
+                    experiment_ids.append(dirs[-1].name)
+        except Exception as exc:
+            print(f"  FAILED: {exc}")
+        finally:
+            tmp_config.unlink(missing_ok=True)
+
+        print()
+
+    print(f"=== Batch complete: {len(experiment_ids)}/{len(experiments)} succeeded ===")
+    if experiment_ids:
+        print("Experiment IDs:")
+        for eid in experiment_ids:
+            print(f"  {eid}")
+        if len(experiment_ids) >= 2:
+            print(f"\nCompare: python -m proactive_eval compare {' '.join(experiment_ids[:5])}")
+
+
+# ---------------------------------------------------------------------------
 # Fixture selection helper
 # ---------------------------------------------------------------------------
 
@@ -613,8 +749,8 @@ def _make_simulate_parser() -> argparse.ArgumentParser:
                         help="Agent ID (overrides fixture config)")
     parser.add_argument("--simulated-at", default=None,
                         help="Time-travel: RFC3339 timestamp for ranking simulation")
-    parser.add_argument("--replay-limit", type=int, default=50,
-                        help="Max items from replay API per agent (default: 50)")
+    parser.add_argument("--replay-limit", type=int, default=None,
+                        help="Max items from replay API per agent (default: no limit)")
     parser.add_argument("--use-feed-history", action="store_true",
                         help="Apply bloom filter to exclude previously seen items")
     # Ranker params
@@ -697,8 +833,8 @@ def main():
                        help="Agent ID (overrides fixture config)")
     p_sim.add_argument("--simulated-at", default=None,
                        help="Time-travel: RFC3339 timestamp for ranking simulation")
-    p_sim.add_argument("--replay-limit", type=int, default=50,
-                       help="Max items from replay API per agent (default: 50)")
+    p_sim.add_argument("--replay-limit", type=int, default=None,
+                       help="Max items from replay API per agent (default: no limit)")
     p_sim.add_argument("--use-feed-history", action="store_true",
                        help="Apply bloom filter to exclude previously seen items")
     # Ranker params
@@ -736,6 +872,10 @@ def main():
     p_compare.add_argument("--port", type=int, default=8420)
     p_compare.add_argument("--no-serve", action="store_true")
 
+    # --- batch ---
+    p_batch = subparsers.add_parser("batch", help="Run multiple experiments (parameter sweep)")
+    p_batch.add_argument("batch_config", help="Path to batch config JSON")
+
     # --- setup ---
     p_setup = subparsers.add_parser("setup", help="Interactive source setup")
     p_setup.add_argument("--source", required=True, choices=["eigenflux"])
@@ -751,6 +891,8 @@ def main():
         cmd_collect(args)
     elif args.command == "simulate":
         cmd_simulate(args)
+    elif args.command == "batch":
+        cmd_batch(args)
     elif args.command == "compare":
         cmd_compare(args)
     elif args.command == "report":

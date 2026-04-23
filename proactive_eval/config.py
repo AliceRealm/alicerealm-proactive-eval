@@ -78,6 +78,7 @@ def apply_config_to_args(parser: argparse.ArgumentParser,
     Returns the list of pre_steps to run."""
     mapping = [
         (["model"], "model", None),
+        # backend is inferred from model name, not stored in config
         (["max_tokens"], "max_tokens", None),
         (["temperature"], "temperature", None),
         (["source"], "source", None),

@@ -27,7 +27,7 @@ from proactive_eval.sources import SignalSource
 _CST = timezone(timedelta(hours=8))
 
 DEFAULT_REPLAY_URL = "http://localhost:8092"
-DEFAULT_REPLAY_LIMIT = 50
+DEFAULT_REPLAY_LIMIT = None  # None = no limit; fetch all available items
 
 
 @dataclass
@@ -45,7 +45,7 @@ class ReplayConfig:
     url: str = DEFAULT_REPLAY_URL
     simulated_at: str | None = None
     use_feed_history: bool = False
-    limit: int = DEFAULT_REPLAY_LIMIT
+    limit: int | None = DEFAULT_REPLAY_LIMIT
     ranker_params: dict[str, Any] = field(default_factory=dict)
     recall_params: dict[str, Any] = field(default_factory=dict)
 
@@ -89,9 +89,10 @@ class ReplaySource(SignalSource):
 
         body: dict[str, Any] = {
             "agent_id": agent_id,
-            "limit": self._config.limit,
             "use_feed_history": self._config.use_feed_history,
         }
+        # Always send limit: None means "no client-side limit" → ask for all
+        body["limit"] = self._config.limit if self._config.limit is not None else 10000
         if self._config.simulated_at:
             body["simulated_at"] = self._config.simulated_at
         if self._config.ranker_params:
