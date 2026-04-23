@@ -5,7 +5,6 @@
   "source": "replay",
   "replay": {
     "url": "http://localhost:8092",
-    "limit": 50,
     "use_feed_history": false,
     "ranker_params": {
       "alpha": 0.80,

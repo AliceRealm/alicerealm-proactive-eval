@@ -284,8 +284,10 @@ def cmd_simulate(args):
         semantic_dedup = False
 
     # Save experiment config
+    exp_name = experiment_cfg.get("name", "") if args.config else ""
     config = {
         "experiment_id": experiment_id,
+        "name": exp_name,
         "resolved_from": config_file_path,
         "model": args.model,
         "backend": backend,
