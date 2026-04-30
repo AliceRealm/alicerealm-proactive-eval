@@ -153,9 +153,11 @@ proactive-eval/
 ├── scripts/          # shell scripts (collection cron, sweep, export)
 ├── eigenflux/        # per-persona credentials (gitignored except template)
 ├── docs/findings/    # experiment write-ups and dashboards
+├── tests/            # unit tests (pytest)
 ├── data/             # (auto-generated, gitignored) collected signals and experiment results
-├── visualize_results.py  # interactive dashboard server for experiment comparison
+├── visualize_results.py  # standalone dashboard server (no deps beyond stdlib)
 ├── METHODOLOGY.md    # simulation setup, decision framework, Send/Action Count metrics
+├── CONTRIBUTING.md   # contribution guidelines
 ├── requirements.txt  # Python dependencies
 └── README.md         # this file
 ```
