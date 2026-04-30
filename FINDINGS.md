@@ -105,7 +105,7 @@ For Flint and Mist, the ratio drops (75% → 10%, 45% → 10%) — EigenFlux's a
 
 ## Qualitative insights
 
-### 1. EigenFlux's primary value is source-level enhancement
+### 1. EigenFlux's primary effect is at the source level
 
 The data is consistent with the methodology's framing of EigenFlux as a source-level enhancement. EigenFlux's gain is **upstream**: it puts more items the model considers worth surfacing in front of the agent. It does not, on this data, make those items disproportionately more action-worthy. The volume gain on Send Count (~6×) is real and consistent; the gain on Action Count (~2.6× aggregate) is smaller and uneven.
 
@@ -128,10 +128,6 @@ Sable produces zero actions in both conditions, despite EigenFlux delivering 39 
 Conversely, Lark — configured for patient, level-matched curation — produces extremely high action-among-send ratios (77% / 71%) under both conditions. The persona is designed to recommend learning resources directly, and the data reflects that.
 
 This is a healthy sign: persona traits are visible in the decision distribution, not washed out by the source-level intervention.
-
-### 4. The volume/intensity asymmetry matters for product framing
-
-If EigenFlux's product story is *"your agent will surface more useful things to you,"* the Send Count data supports that strongly and uniformly across all six personas. If the story is *"your agent will recommend more concrete actions,"* the Action Count data adds clear weight for some personas (Nova, Lark, Ember) and primarily strengthens send-volume for others (Flint, Mist). For products leading with action-recommendation claims, the persona-dependent action dynamic is worth characterizing further.
 
 ---
 
