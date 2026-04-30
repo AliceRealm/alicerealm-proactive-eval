@@ -7,7 +7,6 @@ class RollingContext:
     """Sliding window of recent decisions.
 
     When items fall out of the window, keeps a tally summary.
-    Satisfies the test expectations in test_simulate_decisions.py.
     """
 
     def __init__(self, window_size: int = 30):

@@ -3,11 +3,11 @@
 #
 # To install cron (every 5 min):
 #   crontab -e
-#   */5 * * * * /path/to/proactive-eval/run_collection.sh
+#   */5 * * * * /path/to/proactive-eval/scripts/run_collection.sh
 #
 # To stop after expiry: remove the cron entry, or the script auto-expires.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"  # repo root (one level up from scripts/)
 LOG_DIR="$SCRIPT_DIR/data/logs"
 EXPIRE_FILE="$SCRIPT_DIR/data/.expire_at"
 

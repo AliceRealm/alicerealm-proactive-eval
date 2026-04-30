@@ -65,7 +65,7 @@ Per-pair delta (treatment − control) on Send Count and Action Count is the uni
 |-----------|-------|
 | Personas (`fixtures/`) | 6 — distinct functional traits (e.g. cautious operator, action-first executive, social scout, research synthesizer) |
 | Scenarios (`scenarios/`) | 6 — paired one-to-one with personas; each defines a prep-stage dialogue that establishes the user's expectation boundary |
-| Conditions (`conditions/`) | 2 — `with_eigenflux` and `without_eigenflux`, identical except for the information source |
+| Conditions (`config/conditions/`) | 2 — `with_eigenflux` and `without_eigenflux`, identical except for the information source |
 | Collection window | one day per persona × condition |
 | Decision model | Claude Haiku, called once per item via a forced `decide` tool |
 | Total paired sessions | 6 (one per persona/scenario, run under both conditions) |
@@ -76,7 +76,7 @@ A **run** binds one fixture + one scenario + one condition + a model config, and
 
 ## Quickstart
 
-### 1. Anthropic API key
+### 1. LLM API key
 
 Create `.env` in the repository root:
 
@@ -85,6 +85,14 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 The simulation scripts load this file automatically — no `python-dotenv` dependency required. Anything `export`ed in your shell takes precedence.
+
+**OpenAI-compatible backends** are also supported. The backend is auto-detected from the model name (`claude-*` → Anthropic, anything else → OpenAI). For non-Anthropic models, set:
+
+```
+LLM_API_KEY=your-key
+LLM_BASE_URL=https://your-provider/v1
+LLM_MODEL=your-model-name
+```
 
 ### 2. EigenFlux credentials (treatment runs only)
 
@@ -102,21 +110,21 @@ Never commit real tokens. The repo will refuse them via `.gitignore`.
 Both conditions need a pool of items to triage. Collection runs as separate processes (or under cron):
 
 ```bash
-python3 collect_searches.py            # baseline web-search items
-python3 collect_eigenflux.py           # EigenFlux feed items
+python -m proactive_eval collect --source search --once      # baseline web-search items
+python -m proactive_eval collect --source eigenflux --once   # EigenFlux feed items
 ```
 
-`run_collection.sh` is a cron-friendly wrapper around `collect_searches.py` with auto-expiry.
+`scripts/run_collection.sh` is a cron-friendly wrapper with auto-expiry.
 
 ### 4. Simulate decisions
 
 Per-item decision simulation (`skip` / `send` / `send_with_action`) over the collected items:
 
 ```bash
-python3 simulate_decisions.py                          # all fixtures, both sources
-python3 simulate_decisions.py --fixture 1              # single fixture
-python3 simulate_decisions.py --source eigenflux       # treatment-only
-python3 simulate_decisions.py --dry-run                # build prompts; no API calls
+python -m proactive_eval simulate                             # all fixtures, both sources
+python -m proactive_eval simulate --fixture 1                 # single fixture
+python -m proactive_eval simulate --source eigenflux          # treatment-only
+python -m proactive_eval simulate --dry-run                   # build prompts; no API calls
 ```
 
 Decision logs land under `data/decisions/<fixture>/<run_id>.jsonl`.
@@ -124,7 +132,7 @@ Decision logs land under `data/decisions/<fixture>/<run_id>.jsonl`.
 ### 5. Visualize
 
 ```bash
-python3 visualize_results.py
+python -m proactive_eval report --experiment <id>
 ```
 
 ---
@@ -135,15 +143,22 @@ python3 visualize_results.py
 
 ```
 proactive-eval/
+├── proactive_eval/   # main package (CLI entry: python -m proactive_eval)
 ├── fixtures/         # persona definitions (6)
 ├── scenarios/        # scenario inputs paired with personas (6)
-├── conditions/       # with_eigenflux.json / without_eigenflux.json
+├── config/           # experiment configs, conditions, search queries
+│   ├── conditions/   # with_eigenflux.json / without_eigenflux.json
+│   ├── experiments/  # experiment config files
+│   └── search_queries.json
+├── scripts/          # shell scripts (collection cron, sweep, export)
 ├── eigenflux/        # per-persona credentials (gitignored except template)
-├── collect_*.py      # signal collection (web search, EigenFlux feed)
-├── simulate_decisions.py    # per-item decision simulation
-├── visualize_results.py     # result visualization
-├── tests/            # unit tests for collectors and decision sim
+├── docs/findings/    # experiment write-ups and dashboards
+├── tests/            # unit tests (pytest)
+├── data/             # (auto-generated, gitignored) collected signals and experiment results
+├── visualize_results.py  # standalone dashboard server (no deps beyond stdlib)
 ├── METHODOLOGY.md    # simulation setup, decision framework, Send/Action Count metrics
+├── CONTRIBUTING.md   # contribution guidelines
+├── requirements.txt  # Python dependencies
 └── README.md         # this file
 ```
 
@@ -163,7 +178,7 @@ proactive-eval/
 
 ## Authors and citation
 
-Developed by [Phronesis AI](https://www.phronesis.io), the team behind EigenFlux. Citation guidance and license will be added before the first results release; if you would like to use this benchmark or its scenarios in the meantime, please open an issue.
+Developed by [Phronesis AI](https://www.phronesis.io), the team behind EigenFlux. Released under the [MIT License](LICENSE). Citation guidance will be added before the first results release; if you would like to use this benchmark or its scenarios in the meantime, please open an issue.
 
 ---
 
