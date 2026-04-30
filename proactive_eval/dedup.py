@@ -26,10 +26,7 @@ EMBEDDING_BASE_URL = os.environ.get(
     "EMBEDDING_BASE_URL",
     "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
 )
-EMBEDDING_API_KEY = os.environ.get(
-    "EMBEDDING_API_KEY",
-    "sk-8727c8621e9d414ba9082e1773c33878",
-)
+EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-v4")
 EMBEDDING_DIMENSIONS = int(os.environ.get("EMBEDDING_DIMENSIONS", "1024"))
 SIM_THRESHOLD = float(os.environ.get("SIM_THRESHOLD", "0.70"))

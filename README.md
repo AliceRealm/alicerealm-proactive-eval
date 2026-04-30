@@ -76,7 +76,7 @@ A **run** binds one fixture + one scenario + one condition + a model config, and
 
 ## Quickstart
 
-### 1. Anthropic API key
+### 1. LLM API key
 
 Create `.env` in the repository root:
 
@@ -85,6 +85,14 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 The simulation scripts load this file automatically — no `python-dotenv` dependency required. Anything `export`ed in your shell takes precedence.
+
+**OpenAI-compatible backends** are also supported. The backend is auto-detected from the model name (`claude-*` → Anthropic, anything else → OpenAI). For non-Anthropic models, set:
+
+```
+LLM_API_KEY=your-key
+LLM_BASE_URL=https://your-provider/v1
+LLM_MODEL=your-model-name
+```
 
 ### 2. EigenFlux credentials (treatment runs only)
 
@@ -143,10 +151,10 @@ proactive-eval/
 │   ├── experiments/  # experiment config files
 │   └── search_queries.json
 ├── scripts/          # shell scripts (collection cron, sweep, export)
-├── legacy/           # standalone Python scripts (pre-CLI; kept for reference)
 ├── eigenflux/        # per-persona credentials (gitignored except template)
 ├── docs/findings/    # experiment write-ups and dashboards
-├── tests/            # unit tests for collectors and decision sim
+├── data/             # (auto-generated, gitignored) collected signals and experiment results
+├── visualize_results.py  # interactive dashboard server for experiment comparison
 ├── METHODOLOGY.md    # simulation setup, decision framework, Send/Action Count metrics
 ├── requirements.txt  # Python dependencies
 └── README.md         # this file
@@ -168,7 +176,7 @@ proactive-eval/
 
 ## Authors and citation
 
-Developed by [Phronesis AI](https://www.phronesis.io), the team behind EigenFlux. Citation guidance and license will be added before the first results release; if you would like to use this benchmark or its scenarios in the meantime, please open an issue.
+Developed by [Phronesis AI](https://www.phronesis.io), the team behind EigenFlux. Released under the [MIT License](LICENSE). Citation guidance will be added before the first results release; if you would like to use this benchmark or its scenarios in the meantime, please open an issue.
 
 ---
 

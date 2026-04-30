@@ -169,7 +169,7 @@ def generate_queries(fixture: dict, num_queries: int = DEFAULT_NUM_QUERIES,
 
 
 # ---------------------------------------------------------------------------
-# Query loading (legacy)
+# Query loading
 # ---------------------------------------------------------------------------
 
 def load_queries(queries_file=QUERIES_FILE) -> list[dict]:
