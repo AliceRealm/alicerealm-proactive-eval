@@ -20,7 +20,7 @@ import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parent.parent  # repo root
 EXPERIMENTS_DIR = SCRIPT_DIR / "data" / "experiments"
 DEFAULT_PORT = 8420
 

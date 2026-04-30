@@ -32,7 +32,7 @@ EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-v4")
 EMBEDDING_DIMENSIONS = int(os.environ.get("EMBEDDING_DIMENSIONS", "1024"))
 SIM_THRESHOLD = float(os.environ.get("SIM_THRESHOLD", "0.70"))
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parent.parent  # repo root
 CACHE_DIR = SCRIPT_DIR / "data" / ".embedding_cache"
 
 

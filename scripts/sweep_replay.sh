@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."  # repo root (one level up from scripts/)
 
 # agent_id is now read from each fixture's eigenflux_profile.agent_id
 COMMON="--source replay --model qwen-plus --workers 16"

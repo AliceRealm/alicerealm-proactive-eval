@@ -27,6 +27,7 @@ from unittest.mock import MagicMock, patch
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(SCRIPT_DIR / "legacy"))
 
 import simulate_decisions as sd  # noqa: E402
 

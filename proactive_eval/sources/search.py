@@ -13,7 +13,7 @@ from proactive_eval.sources import SignalSource
 from proactive_eval.config import SCRIPT_DIR, rel_path, load_fixtures
 
 DATA_DIR = SCRIPT_DIR / "data" / "searches"
-QUERIES_FILE = SCRIPT_DIR / "search_queries.json"
+QUERIES_FILE = SCRIPT_DIR / "config" / "search_queries.json"
 MAX_RESULTS_PER_QUERY = 5
 SLEEP_BETWEEN_QUERIES = 5
 DEFAULT_NUM_QUERIES = 5

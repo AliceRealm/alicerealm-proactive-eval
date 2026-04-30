@@ -23,8 +23,8 @@ from pathlib import Path
 
 from ddgs import DDGS
 
-SCRIPT_DIR = Path(__file__).parent
-QUERIES_FILE = SCRIPT_DIR / "search_queries.json"
+SCRIPT_DIR = Path(__file__).resolve().parent.parent  # repo root
+QUERIES_FILE = SCRIPT_DIR / "config" / "search_queries.json"
 DATA_DIR = SCRIPT_DIR / "data" / "searches"
 MAX_RESULTS_PER_QUERY = 5
 SLEEP_BETWEEN_QUERIES = 5  # seconds, to avoid rate limiting

@@ -24,7 +24,7 @@ import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).parent
+SCRIPT_DIR = Path(__file__).resolve().parent.parent  # repo root
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 DATA_DIR = SCRIPT_DIR / "data" / "eigenflux"
 CREDENTIALS_DIR = SCRIPT_DIR / "eigenflux" / "credentials"

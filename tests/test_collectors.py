@@ -31,6 +31,7 @@ from unittest.mock import MagicMock, patch
 # Make the proactive-eval/ directory importable regardless of cwd.
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(SCRIPT_DIR / "legacy"))
 
 import collect_eigenflux as e  # noqa: E402
 import collect_searches as s   # noqa: E402

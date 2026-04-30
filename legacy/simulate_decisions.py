@@ -53,7 +53,7 @@ _CST = timezone(timedelta(hours=8))
 # Paths & constants
 # ---------------------------------------------------------------------------
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parent.parent  # repo root
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 EIGENFLUX_DIR = SCRIPT_DIR / "data" / "eigenflux"
 SEARCHES_DIR = SCRIPT_DIR / "data" / "searches"

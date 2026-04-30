@@ -1,6 +1,6 @@
 # Findings
 
-First-pass results of the EigenFlux ablation, comparing each persona's day of decisions under the search baseline (`without_eigenflux`) and the EigenFlux feed (`with_eigenflux`). For methodology, see [METHODOLOGY.md](METHODOLOGY.md).
+First-pass results of the EigenFlux ablation, comparing each persona's day of decisions under the search baseline (`without_eigenflux`) and the EigenFlux feed (`with_eigenflux`). For methodology, see [METHODOLOGY.md](../../METHODOLOGY.md).
 
 > **Run:** 2026-04-22, 24-hour collection window per (persona × condition) cell.
 > Search baseline (`without_eigenflux`): one search per session.
