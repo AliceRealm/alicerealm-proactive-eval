@@ -1,12 +1,12 @@
 """Unified CLI entry point for proactive-eval.
 
 Usage:
-    python -m proactive_eval collect    --source eigenflux --once
+    python -m proactive_eval collect    --source alicerealm --once
     python -m proactive_eval simulate   --config config/experiments/sample.json
     python -m proactive_eval score      --experiment <id>
     python -m proactive_eval report     --experiment <id>
     python -m proactive_eval run        --config ...   # end-to-end pipeline
-    python -m proactive_eval setup      --source eigenflux
+    python -m proactive_eval setup      --source alicerealm
 """
 
 from __future__ import annotations
@@ -130,9 +130,10 @@ def sample_items(items: list[SignalItem], sample_size: int | None,
 
 def pre_step_clear_impressions(fixtures: list[dict]):
     import urllib.request
-    base_url = os.environ.get("EIGENFLUX_CONSOLE_URL", "http://localhost:8090") + "/console/api/v1/impr/items"
+    base_url = os.environ.get("ALICEREALM_CONSOLE_URL", os.environ.get("EIGENFLUX_CONSOLE_URL", "http://localhost:8090")) + "/console/api/v1/impr/items"
     for fixture in fixtures:
-        agent_id = fixture.get("eigenflux_profile", {}).get("agent_id")
+        profile = fixture.get("alicerealm_profile") or fixture.get("eigenflux_profile", {})
+        agent_id = profile.get("agent_id")
         if not agent_id:
             continue
         url = f"{base_url}?agent_id={agent_id}"
@@ -154,15 +155,15 @@ PRE_STEPS = {"clear_impressions": pre_step_clear_impressions}
 def cmd_collect(args):
     """Collect signals from a source."""
     from proactive_eval.sources import get_source
-    from proactive_eval.sources.eigenflux import sync_profiles
+    from proactive_eval.sources.alicerealm import sync_profiles
 
     all_fixtures = load_fixtures()
     fixtures = _select_fixtures(all_fixtures, args.fixture)
 
     source = get_source(args.source)
 
-    # Auto-sync profiles for eigenflux
-    if args.source == "eigenflux" and not args.dry_run and not args.skip_profile_sync:
+    # Auto-sync profiles for AliceRealm and the historical EigenFlux alias.
+    if args.source in ("alicerealm", "eigenflux") and not args.dry_run and not args.skip_profile_sync:
         print("=== Syncing profiles ===")
         sync_profiles(fixtures)
         print()
@@ -319,12 +320,12 @@ def cmd_simulate(args):
     run_label = "results"
 
     # Load signals
-    from proactive_eval.sources.eigenflux import EigenFluxSource
+    from proactive_eval.sources.alicerealm import AliceRealmSource
     from proactive_eval.sources.search import SearchSource
     from proactive_eval.sources.replay import ReplaySource, ReplayConfig
 
-    if args.source == "eigenflux":
-        src = EigenFluxSource()
+    if args.source in ("alicerealm", "eigenflux"):
+        src = AliceRealmSource()
     elif args.source == "searches":
         src = SearchSource()
     elif args.source == "replay":
@@ -356,7 +357,7 @@ def cmd_simulate(args):
         # Health check
         if not src.health_check():
             print(f"Error: Replay API not reachable at {replay_config.url}")
-            print(f"Start it: cd repos/eigenflux && bash replay/scripts/start.sh")
+            print(f"Start it: cd repos/alicerealm && bash replay/scripts/start.sh")
             sys.exit(1)
         print(f"  Replay API: {replay_config.url} ✓")
         if ranker_params:
@@ -378,7 +379,8 @@ def cmd_simulate(args):
         # Replay source: collect from API per fixture
         for fixture in fixtures:
             fid = fixture["fixture_id"]
-            agent_id = args.agent_id or fixture.get("eigenflux_profile", {}).get("agent_id")
+            profile = fixture.get("alicerealm_profile") or fixture.get("eigenflux_profile", {})
+            agent_id = args.agent_id or profile.get("agent_id")
             if agent_id is not None:
                 agent_id = int(agent_id)
             if not agent_id:
@@ -727,7 +729,7 @@ def _select_fixtures(all_fixtures: list[dict], fixture_idx: int | None,
 def _make_simulate_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", type=int, default=None)
-    parser.add_argument("--source", choices=["eigenflux", "searches", "replay"], default="eigenflux")
+    parser.add_argument("--source", choices=["alicerealm", "eigenflux", "searches", "replay"], default="alicerealm")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--sample", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -793,7 +795,7 @@ def main():
 
     # --- collect ---
     p_collect = subparsers.add_parser("collect", help="Collect signals from a source")
-    p_collect.add_argument("--source", required=True, choices=["eigenflux", "search"])
+    p_collect.add_argument("--source", required=True, choices=["alicerealm", "eigenflux", "search"])
     p_collect.add_argument("--fixture", type=int, default=None)
     p_collect.add_argument("--once", action="store_true")
     p_collect.add_argument("--interval", type=int, default=5)
@@ -811,7 +813,7 @@ def main():
     # --- simulate ---
     p_sim = subparsers.add_parser("simulate", help="Run simulation on collected signals")
     p_sim.add_argument("--fixture", type=int, default=None)
-    p_sim.add_argument("--source", choices=["eigenflux", "searches", "replay"], default="eigenflux")
+    p_sim.add_argument("--source", choices=["alicerealm", "eigenflux", "searches", "replay"], default="alicerealm")
     p_sim.add_argument("--model", default=DEFAULT_MODEL)
     p_sim.add_argument("--sample", type=int, default=None)
     p_sim.add_argument("--seed", type=int, default=42)
@@ -880,7 +882,7 @@ def main():
 
     # --- setup ---
     p_setup = subparsers.add_parser("setup", help="Interactive source setup")
-    p_setup.add_argument("--source", required=True, choices=["eigenflux"])
+    p_setup.add_argument("--source", required=True, choices=["alicerealm", "eigenflux"])
     p_setup.add_argument("--fixture", type=int, default=None)
 
     args = parser.parse_args()

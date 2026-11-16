@@ -28,7 +28,7 @@ class SignalSource(ABC):
         raise NotImplementedError(f"{self.source_name} does not support replay")
 
     def setup(self, fixture: dict) -> None:
-        """Optional interactive setup (e.g. EigenFlux login)."""
+        """Optional interactive setup (e.g. AliceRealm login)."""
         pass
 
 
@@ -51,10 +51,12 @@ def available_sources() -> list[str]:
 
 
 # Auto-register built-in sources
-from proactive_eval.sources.eigenflux import EigenFluxSource  # noqa: E402
+from proactive_eval.sources.alicerealm import AliceRealmSource  # noqa: E402
 from proactive_eval.sources.search import SearchSource  # noqa: E402
 from proactive_eval.sources.replay import ReplaySource  # noqa: E402
 
-register_source("eigenflux", EigenFluxSource)
+register_source("alicerealm", AliceRealmSource)
+# Keep the historical study label readable without duplicating implementation.
+register_source("eigenflux", AliceRealmSource)
 register_source("search", SearchSource)
 register_source("replay", ReplaySource)
