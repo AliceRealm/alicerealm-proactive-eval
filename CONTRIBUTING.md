@@ -5,7 +5,7 @@ Thanks for your interest! This project is in early stages, so contributions of a
 ## Getting started
 
 ```bash
-git clone https://github.com/phronesis-io/proactive-eval.git
+git clone https://github.com/AliceRealm/alicerealm-proactive-eval.git
 cd proactive-eval
 pip install -r requirements.txt
 ```

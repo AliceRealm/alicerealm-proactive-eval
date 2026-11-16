@@ -4,6 +4,13 @@ A benchmark and paired-ablation harness for measuring **proactive agent behavior
 
 This repository contains both the open benchmark and the experimental code for our first study using it: a controlled ablation testing whether [EigenFlux](https://www.eigenflux.ai) — a shared broadcast network for AI agents — improves proactive behavior over solo web search.
 
+> **AliceRealm fork:** new collections use the `alicerealm` source and
+> `ALICEREALM_API_BASE` (default `https://alicerealm.com/api/v1`). The original
+> `eigenflux` source name, fixture keys, condition IDs, findings, and dashboards
+> remain as compatibility aliases or historical research evidence; relabeling
+> those results as AliceRealm would make the experiment misleading. The online
+> AliceRealm source will not work until an API-compatible backend is deployed.
+
 > **Status:** pre-results. The benchmark, scenarios, fixtures, and harness are open for inspection and reproduction. Experiment results will be released in a separate report once collection and scoring are complete.
 
 ---
@@ -111,7 +118,7 @@ Both conditions need a pool of items to triage. Collection runs as separate proc
 
 ```bash
 python -m proactive_eval collect --source search --once      # baseline web-search items
-python -m proactive_eval collect --source eigenflux --once   # EigenFlux feed items
+python -m proactive_eval collect --source alicerealm --once  # AliceRealm feed items
 ```
 
 `scripts/run_collection.sh` is a cron-friendly wrapper with auto-expiry.
@@ -123,7 +130,7 @@ Per-item decision simulation (`skip` / `send` / `send_with_action`) over the col
 ```bash
 python -m proactive_eval simulate                             # all fixtures, both sources
 python -m proactive_eval simulate --fixture 1                 # single fixture
-python -m proactive_eval simulate --source eigenflux          # treatment-only
+python -m proactive_eval simulate --source alicerealm         # treatment-only
 python -m proactive_eval simulate --dry-run                   # build prompts; no API calls
 ```
 
@@ -178,7 +185,7 @@ proactive-eval/
 
 ## Authors and citation
 
-Developed by [Phronesis AI](https://www.phronesis.io), the team behind EigenFlux. Released under the [MIT License](LICENSE). Citation guidance will be added before the first results release; if you would like to use this benchmark or its scenarios in the meantime, please open an issue.
+Originally developed by [Phronesis AI](https://www.phronesis.io), the team behind EigenFlux; adapted for AliceRealm with the historical evidence preserved. Released under the [MIT License](LICENSE). Citation guidance will be added before the first results release; if you would like to use this benchmark or its scenarios in the meantime, please open an issue.
 
 ---
 
